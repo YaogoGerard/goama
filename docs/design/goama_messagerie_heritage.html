@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0F0F0F">
+  <meta name="description" content="Goama Messagerie — espace de communication des agents">
+  <title>Goama Messagerie</title>
+  <style>
+    :root {
+      --bg:#0B0D12; --bg-2:#11151C; --surface:#171D26; --surface-2:#1E2631;
+      --line:#293342; --text:#F2F5F8; --muted:#A0AAB7; --subtle:#707C8B;
+      --accent:#00BFA6; --accent-hover:#00A991; --success:#36B37E; --warning:#E5AE52; --danger:#E16B70;
+      --radius:4px; --shadow:0 12px 32px rgba(0,0,0,.24);
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    }
+    [data-theme="light"] { --bg:#F5F7F9; --bg-2:#fff; --surface:#fff; --surface-2:#F0F3F6; --line:#E1E6EC; --text:#18212B; --muted:#596675; --subtle:#8793A1; --accent:#008F7B; --accent-hover:#007967; --success:#23865B; --warning:#A76B12; --danger:#C4474D; --shadow:0 12px 32px rgba(24,33,43,.12); }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:var(--bg); color:var(--text); }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .app { display:grid; grid-template-columns:280px 360px minmax(0,1fr); min-height:100vh; }
+    .rail { background:var(--bg-2); border-right:1px solid var(--line); padding:24px 16px; display:flex; flex-direction:column; }
+    .brand { display:flex; align-items:center; gap:12px; padding:0 8px 28px; }
+    .mark { width:32px; height:32px; display:grid; place-items:center; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius); font-weight:700; letter-spacing:-.08em; }
+    .brand strong { font-size:17px; letter-spacing:.02em; }
+    .brand small { display:block; color:var(--subtle); font-size:11px; margin-top:2px; }
+    .nav { display:grid; gap:4px; }
+    .nav button,.rail-footer button { display:flex; align-items:center; gap:12px; width:100%; border:0; background:transparent; color:var(--muted); text-align:left; border-radius:var(--radius); padding:11px 12px; }
+    .nav button:hover,.nav button.active,.rail-footer button:hover { color:var(--text); background:var(--surface-2); }
+    .nav button.active { box-shadow:inset 3px 0 var(--accent); }
+    .nav kbd { margin-left:auto; color:var(--subtle); font-size:11px; }
+    .rail-footer { margin-top:auto; border-top:1px solid var(--line); padding-top:16px; display:grid; gap:4px; }
+    .profile { display:flex; gap:10px; align-items:center; padding:12px; margin-top:12px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); }
+    .avatar { width:32px; height:32px; display:grid; place-items:center; background:var(--accent); color:#06231f; border-radius:50%; font-weight:700; font-size:12px; }
+    .profile div:last-child { min-width:0; } .profile strong,.profile small { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .profile small { color:var(--muted); font-size:12px; margin-top:2px; }
+    .list { background:var(--surface); border-right:1px solid var(--line); min-width:0; }
+    .list-head { padding:24px 20px 16px; border-bottom:1px solid var(--line); }
+    .eyebrow { color:var(--subtle); text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-weight:700; }
+    h1,h2,h3,p { margin:0; } h1 { font-size:24px; letter-spacing:-.03em; } h2 { font-size:18px; } h3 { font-size:15px; }
+    .list-head h1 { margin-top:8px; }
+    .search { margin-top:18px; position:relative; } .search input { width:100%; height:42px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-2); color:var(--text); padding:0 12px 0 36px; outline:0; } .search input:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent); } .search span { position:absolute; left:12px; top:10px; color:var(--subtle); }
+    .filters { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid var(--line); overflow:auto; } .filter { border:1px solid var(--line); background:transparent; color:var(--muted); border-radius:999px; padding:6px 10px; white-space:nowrap; font-size:12px; } .filter.active { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:700; }
+    .threads { padding:8px; } .thread { display:grid; grid-template-columns:40px minmax(0,1fr) auto; gap:10px; padding:12px; border:1px solid transparent; border-radius:var(--radius); color:var(--text); text-align:left; width:100%; background:transparent; } .thread:hover { background:var(--surface-2); } .thread.selected { background:var(--surface-2); border-color:var(--line); } .thread .avatar { width:40px; height:40px; } .thread-body { min-width:0; } .thread strong,.thread p { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .thread p { color:var(--muted); font-size:13px; margin-top:3px; } .thread-meta { color:var(--subtle); font-size:11px; text-align:right; } .unread { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 4px; margin-top:8px; border-radius:999px; background:var(--accent); color:#06231f; font-size:11px; font-weight:700; }
+    .conversation { min-width:0; display:flex; flex-direction:column; background:var(--bg); }
+    .conversation-head { min-height:76px; padding:16px 28px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line); background:var(--bg-2); } .conversation-head .avatar { width:38px; height:38px; } .conversation-head .presence { color:var(--success); font-size:12px; margin-top:3px; } .conversation-head .actions { margin-left:auto; display:flex; gap:8px; }
+    .icon-btn,.ghost { border:1px solid var(--line); color:var(--muted); background:transparent; border-radius:var(--radius); min-height:40px; padding:0 12px; } .icon-btn { width:40px; padding:0; } .icon-btn:hover,.ghost:hover { border-color:var(--accent); color:var(--text); }
+    .back { display:none; }
+    .group-mode .delivery-status { display:none; }
+    .classification { padding:10px 28px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; } .classification b { color:var(--warning); font-weight:600; }
+    .messages { flex:1; overflow:auto; padding:28px; display:flex; flex-direction:column; gap:18px; }
+    .date { align-self:center; color:var(--subtle); font-size:11px; text-transform:uppercase; letter-spacing:.1em; }
+    .message { display:flex; gap:10px; max-width:680px; } .message.mine { align-self:flex-end; flex-direction:row-reverse; } .message .avatar { flex:0 0 30px; width:30px; height:30px; font-size:10px; background:var(--surface-2); color:var(--text); } .message.mine .avatar { background:var(--accent); color:#06231f; } .bubble { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:11px 13px; } .mine .bubble { background:color-mix(in srgb,var(--accent) 16%,var(--surface)); border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); } .bubble p { line-height:1.55; } .bubble footer { color:var(--subtle); font-size:11px; margin-top:6px; display:flex; gap:8px; } .mine .bubble footer { justify-content:flex-end; } .read { color:var(--accent); }
+    .composer { padding:16px 28px 20px; border-top:1px solid var(--line); background:var(--bg-2); } .composer form { display:flex; gap:8px; } .composer input { flex:1; min-width:0; height:46px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); color:var(--text); padding:0 14px; outline:0; } .composer input:focus { border-color:var(--accent); } .primary { border:1px solid var(--accent); background:var(--accent); color:#06231f; border-radius:var(--radius); padding:0 18px; font-weight:700; } .primary:hover { background:var(--accent-hover); }
+    .toast { position:fixed; right:24px; bottom:24px; background:var(--surface-2); border:1px solid var(--line); box-shadow:var(--shadow); padding:12px 16px; border-radius:var(--radius); font-size:13px; opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; } .toast.show { opacity:1; transform:none; }
+    @media (max-width:1023px) { .app { grid-template-columns:72px 320px minmax(0,1fr); } .rail { padding:18px 10px; align-items:center; } .brand { padding:0 0 24px; } .brand > div:last-child,.nav span,.nav kbd,.rail-footer span,.profile div:last-child { display:none; } .nav button,.rail-footer button { justify-content:center; padding:12px; } .profile { padding:8px; } }
+    @media (max-width:639px) { .app { display:block; min-height:100dvh; } .rail { display:none; } .list,.conversation { min-height:100dvh; } .conversation { display:none; } .app.mobile-chat .list { display:none; } .app.mobile-chat .conversation { display:flex; } .list-head { padding:20px 16px 14px; } .filters { padding-inline:16px; } .threads { padding:6px; } .conversation-head { padding:12px 16px; min-height:64px; } .back { display:block; } .conversation-head .actions .icon-btn:not(:last-child) { display:none; } .classification { padding-inline:16px; } .messages { padding:20px 16px; } .composer { padding:12px 16px 16px; } .composer .ghost { display:none; } .toast { right:16px; bottom:16px; left:16px; } }
+    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; transition:none!important; } }
+
+    /* Sovereign Heritage — Goama messaging refinement */
+    :root{
+      --bg:#0F0F0F;--bg-2:#151515;--surface:#1B1B1A;--surface-2:#242321;
+      --line:#39352D;--text:#F5F5F5;--muted:#B9B9B9;--subtle:#918A7D;
+      --accent:#F5B700;--accent-hover:#FFD15A;--success:#3C9C40;
+      --warning:#F59E0B;--danger:#D62828;--radius:10px;--shadow:0 14px 36px rgba(0,0,0,.28);
+      font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark;
+    }
+    [data-theme="light"]{
+      --bg:#F5F2EA;--bg-2:#FFFEFA;--surface:#FFFFFF;--surface-2:#F1EBDD;
+      --line:#DED5C4;--text:#211D16;--muted:#655D50;--subtle:#857B69;
+      --accent:#A97800;--accent-hover:#8B6400;--success:#287B35;
+      --warning:#A76B12;--danger:#B52D2D;--shadow:0 14px 36px rgba(35,28,16,.10);color-scheme:light;
+    }
+    html,body{background:var(--bg)}
+    body{background-image:radial-gradient(ellipse at 78% -12%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 34rem)}
+    .app{grid-template-columns:260px 350px minmax(0,1fr)}
+    .rail{background:var(--bg-2);padding:28px 17px}
+    .brand{padding-bottom:34px}
+    .mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 17%,var(--surface)),transparent);border-color:var(--accent);box-shadow:0 0 24px color-mix(in srgb,var(--accent) 10%,transparent);font-size:18px}
+    .brand strong{font-size:18px}.brand small{letter-spacing:.09em;text-transform:uppercase;font-size:10px}
+    .nav{gap:6px}.nav button,.rail-footer button{border-radius:9px;padding:12px 13px;transition:.18s}
+    .nav button.active{background:color-mix(in srgb,var(--accent) 11%,var(--surface-2));box-shadow:inset 3px 0 var(--accent)}
+    .nav button.active:after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:auto}
+    .nav kbd{border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+    .profile{border-radius:12px;padding:13px;background:var(--surface)}
+    .avatar{background:var(--accent);color:#2B1D00}
+    .list{background:var(--surface);box-shadow:8px 0 24px rgba(0,0,0,.06)}
+    .list-head{padding:27px 21px 18px}
+    .eyebrow{color:var(--accent);letter-spacing:.16em}
+    h1{font-size:26px;letter-spacing:-.045em}
+    .search input{height:44px;border-radius:9px;background:var(--bg-2)}
+    .search input:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 17%,transparent)}
+    .filters{padding:13px 18px}
+    .filter{border-radius:999px;padding:7px 12px;transition:.18s}
+    .filter.active{background:var(--accent);border-color:var(--accent);color:#2B1D00}
+    .threads{padding:9px}
+    .thread{border-radius:11px;padding:13px 12px;transition:background .16s,border-color .16s}
+    .thread.selected{background:color-mix(in srgb,var(--accent) 9%,var(--surface-2));border-color:color-mix(in srgb,var(--accent) 28%,var(--line))}
+    .thread .avatar{background:var(--surface-2);color:var(--accent);border:1px solid var(--line)}
+    .thread.selected .avatar{background:var(--accent);color:#2B1D00;border-color:var(--accent)}
+    .thread p{line-height:1.45}
+    .unread{background:var(--accent);color:#2B1D00}
+    .conversation{background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--accent) 4%,transparent),transparent 42rem),var(--bg)}
+    .conversation-head{min-height:78px;padding:16px clamp(18px,3vw,36px);background:color-mix(in srgb,var(--bg-2) 94%,transparent);backdrop-filter:blur(12px)}
+    .conversation-head .avatar{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+    .conversation-head .presence{display:flex;align-items:center;gap:6px}
+    .conversation-head .presence:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--success)}
+    .icon-btn,.ghost{border-radius:9px;transition:.18s}
+    .icon-btn:hover,.ghost:hover{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+    .classification{padding:11px clamp(18px,3vw,36px);background:color-mix(in srgb,var(--surface) 52%,transparent)}
+    .classification b{color:var(--accent)}
+    .messages{padding:clamp(20px,3vw,38px);gap:20px}
+    .date{padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);letter-spacing:.08em}
+    .message{max-width:min(720px,82%)}
+    .message .avatar{border:1px solid var(--line)}
+    .bubble{border-radius:4px 14px 14px 14px;padding:13px 16px;box-shadow:0 5px 18px rgba(0,0,0,.08)}
+    .message.mine .bubble{border-radius:14px 4px 14px 14px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+    .bubble p{line-height:1.65}
+    .read{color:var(--accent)}
+    .composer{padding:16px clamp(18px,3vw,36px) 20px;background:color-mix(in srgb,var(--bg-2) 96%,transparent)}
+    .composer input{height:48px;border-radius:10px;background:var(--surface)}
+    .composer input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+    .primary{border-radius:9px;background:var(--accent);border-color:var(--accent);color:#2B1D00;transition:.18s}
+    .primary:hover{background:var(--accent-hover);transform:translateY(-1px)}
+    .toast{border-radius:10px}
+    button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    @media(max-width:1023px){.app{grid-template-columns:72px 310px minmax(0,1fr)}.rail{padding:20px 10px}}
+    @media(max-width:639px){.app{display:block}.list-head{padding:22px 16px 16px}.conversation-head{padding:12px 16px}.messages{padding:20px 16px}.message{max-width:92%}.composer{padding:12px 16px 16px}}
+
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="rail" aria-label="Navigation principale">
+      <div class="brand"><div class="mark">G</div><div><strong>Goama</strong><small>Messagerie</small></div></div>
+      <nav class="nav">
+        <button class="active" type="button" data-section="Conversations"><span>Conversations</span><kbd>1</kbd></button>
+        <button type="button" data-section="Annuaire"><span>Annuaire</span></button>
+        <button type="button" data-section="Groupes"><span>Groupes</span></button>
+        <button type="button" data-section="Demandes"><span>Demandes</span><kbd>2</kbd></button>
+        <button type="button" data-section="Paramètres"><span>Paramètres</span></button>
+      </nav>
+      <div class="rail-footer">
+        <button type="button" id="themeToggle"><span>☼</span><span>Thème clair</span></button>
+        <div class="profile"><div class="avatar">AM</div><div><strong>Alex Martin</strong><small>Direction des services</small></div></div>
+      </div>
+    </aside>
+    <section class="list" aria-label="Liste des conversations">
+      <header class="list-head"><p class="eyebrow">Espace agent</p><h1>Conversations</h1><label class="search"><span>⌕</span><input id="search" type="search" placeholder="Rechercher une conversation" aria-label="Rechercher une conversation"></label></header>
+      <div class="filters"><button class="filter active" type="button">Toutes</button><button class="filter" type="button">Non lues <b>2</b></button><button class="filter" type="button">Groupes</button></div>
+      <div class="threads" id="threads">
+        <button class="thread selected" type="button" data-name="Claire Dubois" data-kind="individuelle"><div class="avatar">CD</div><div class="thread-body"><strong>Claire Dubois</strong><p>Le dossier est prêt pour relecture.</p></div><div class="thread-meta">10:42<span class="unread">2</span></div></button>
+        <button class="thread" type="button" data-name="Cellule projet Atlas" data-kind="groupe"><div class="avatar">AT</div><div class="thread-body"><strong>Cellule projet Atlas</strong><p>Marc : Réunion confirmée pour demain.</p></div><div class="thread-meta">09:18</div></button>
+        <button class="thread" type="button" data-name="Sophie Bernard" data-kind="individuelle"><div class="avatar">SB</div><div class="thread-body"><strong>Sophie Bernard</strong><p>Merci, je confirme la réception.</p></div><div class="thread-meta">Hier</div></button>
+        <button class="thread" type="button" data-name="Groupe sécurité" data-kind="groupe"><div class="avatar">GS</div><div class="thread-body"><strong>Groupe sécurité</strong><p>Une mise à jour est disponible.</p></div><div class="thread-meta">Lun.</div></button>
+      </div>
+    </section>
+    <main class="conversation" aria-label="Conversation sélectionnée">
+      <header class="conversation-head"><button class="icon-btn back" id="back" type="button" aria-label="Retour à la liste">←</button><div class="avatar" id="conversationAvatar">CD</div><div><h2 id="conversationName">Claire Dubois</h2><p class="presence">Disponible</p></div><div class="actions"><button class="icon-btn" type="button" aria-label="Informations">i</button><button class="icon-btn" type="button" aria-label="Plus d'options">⋯</button></div></header>
+      <div class="classification">Classification : <b id="classification">Confidentiel</b> <span>· Échange individuel</span></div>
+      <section class="messages" id="messages"><div class="date">Aujourd'hui</div><article class="message"><div class="avatar">CD</div><div class="bubble"><p>Bonjour Alex, le dossier est prêt pour relecture. Je vous laisse me dire si un point doit être précisé.</p><footer><span>10:39</span></footer></div></article><article class="message mine"><div class="avatar">AM</div><div class="bubble"><p>Bonjour Claire. Je le consulte maintenant et je reviens vers vous avant midi.</p><footer><span>10:42</span><span class="read delivery-status">Lu</span></footer></div></article></section>
+      <div class="composer"><form id="composer"><button class="ghost" id="attach" type="button" aria-label="Ajouter une pièce jointe">Joindre</button><input id="messageInput" aria-label="Écrire un message" placeholder="Écrire un message…"><button class="primary" type="submit">Envoyer</button></form></div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script>
+    const app=document.getElementById('app'), toast=document.getElementById('toast'), conversation=document.querySelector('.conversation');
+    function notify(text){toast.textContent=text;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2200)}
+    document.querySelectorAll('.thread').forEach(item=>item.addEventListener('click',()=>{document.querySelectorAll('.thread').forEach(x=>x.classList.remove('selected'));item.classList.add('selected');document.getElementById('conversationName').textContent=item.dataset.name;document.getElementById('conversationAvatar').textContent=item.querySelector('.avatar').textContent;document.getElementById('classification').textContent=item.dataset.kind==='groupe'?'Diffusion restreinte':'Confidentiel';document.querySelector('.classification span').textContent=item.dataset.kind==='groupe'?'· Échange de groupe':'· Échange individuel';conversation.classList.toggle('group-mode',item.dataset.kind==='groupe');app.classList.add('mobile-chat');}));
+    document.getElementById('back').addEventListener('click',()=>app.classList.remove('mobile-chat'));
+    document.getElementById('search').addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('.thread').forEach(x=>x.hidden=!x.dataset.name.toLowerCase().includes(q))});
+    document.getElementById('composer').addEventListener('submit',e=>{e.preventDefault();const input=document.getElementById('messageInput');if(!input.value.trim()){notify('Écrivez un message avant de l’envoyer.');return}const el=document.createElement('article');el.className='message mine';el.innerHTML='<div class="avatar">AM</div><div class="bubble"><p></p><footer><span>À l’instant</span><span class="read delivery-status">Envoyé</span></footer></div>';el.querySelector('p').textContent=input.value.trim();document.getElementById('messages').appendChild(el);input.value='';notify('Votre message a été envoyé.');});
+    document.getElementById('attach').addEventListener('click',()=>notify('Les pièces jointes seront disponibles selon vos autorisations.'));
+    document.querySelectorAll('.nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));button.classList.add('active');if(button.dataset.section!=='Conversations')notify(`${button.dataset.section} sera disponible dans cet espace.`);}));
+    document.querySelectorAll('.filter').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));button.classList.add('active');const label=button.textContent.trim();document.querySelectorAll('.thread').forEach(x=>x.hidden=label.startsWith('Non lues')?!x.querySelector('.unread'):label==='Groupes'?x.dataset.kind!=='groupe':false);}));
+    const savedTheme=localStorage.getItem('goama-theme');if(savedTheme){document.documentElement.dataset.theme=savedTheme;document.querySelector('#themeToggle span:last-child').textContent=savedTheme==='light'?'Thème sombre':'Thème clair';}
+    document.getElementById('themeToggle').addEventListener('click',()=>{const html=document.documentElement;const light=html.dataset.theme==='light';html.dataset.theme=light?'dark':'light';localStorage.setItem('goama-theme',html.dataset.theme);document.querySelector('#themeToggle span:last-child').textContent=light?'Thème clair':'Thème sombre';});
+  </script>
+</body>
+</html>

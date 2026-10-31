@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0F0F0F">
+  <meta name="description" content="Goama Admin — gestion administrative de la plateforme">
+  <title>Goama Admin</title>
+  <style>
+    :root{--bg:#0B0D12;--bg2:#11151C;--surface:#171D26;--surface2:#1E2631;--line:#293342;--text:#F2F5F8;--muted:#A0AAB7;--subtle:#707C8B;--accent:#00BFA6;--accentHover:#00A991;--success:#36B37E;--warn:#E5AE52;--danger:#E16B70;--radius:4px;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+    [data-theme=light]{--bg:#F5F7F9;--bg2:#fff;--surface:#fff;--surface2:#F0F3F6;--line:#E1E6EC;--text:#18212B;--muted:#596675;--subtle:#8793A1;--accent:#008F7B;--accentHover:#007967;--success:#23865B;--warn:#A76B12;--danger:#C4474D}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}button,input,select{font:inherit}button{cursor:pointer}
+    .shell{min-height:100vh;display:grid;grid-template-columns:248px minmax(0,1fr)}.sidebar{background:var(--bg2);border-right:1px solid var(--line);padding:24px 16px;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 32px}.mark{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-weight:700}.brand strong{display:block;font-size:17px}.brand small{display:block;color:var(--subtle);font-size:11px;margin-top:2px}.nav{display:grid;gap:4px}.nav button,.sidebar-foot button{width:100%;padding:11px 12px;border:0;border-radius:var(--radius);background:transparent;color:var(--muted);text-align:left;display:flex;gap:12px;align-items:center}.nav button:hover,.nav button.active,.sidebar-foot button:hover{color:var(--text);background:var(--surface2)}.nav button.active{box-shadow:inset 3px 0 var(--accent)}.nav .count{margin-left:auto;color:var(--accent);font-size:12px}.sidebar-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:16px;display:grid;gap:4px}.operator{display:flex;align-items:center;gap:10px;padding:12px;margin-top:12px;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius)}.avatar{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--accent);color:#06231f;font-weight:700;font-size:11px}.operator strong,.operator small{display:block}.operator small{font-size:12px;color:var(--muted);margin-top:2px}
+    .content{min-width:0}.topbar{height:76px;padding:0 36px;border-bottom:1px solid var(--line);background:var(--bg2);display:flex;align-items:center;gap:16px}.menu{display:none}.topbar .crumb{color:var(--subtle);font-size:13px}.topbar .crumb b{color:var(--text);font-weight:600}.top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}.icon{width:40px;height:40px;border:1px solid var(--line);border-radius:var(--radius);background:transparent;color:var(--muted)}.icon:hover{border-color:var(--accent);color:var(--text)}.main{max-width:1280px;padding:36px;margin:0 auto}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--subtle);font-weight:700}.intro h1{font-size:28px;letter-spacing:-.04em;margin:8px 0 6px}.intro p{color:var(--muted);font-size:14px}.primary{background:var(--accent);color:#06231f;border:1px solid var(--accent);border-radius:var(--radius);padding:11px 16px;font-weight:700;white-space:nowrap}.primary:hover{background:var(--accentHover)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}.stat-label{color:var(--muted);font-size:13px}.stat strong{font-size:28px;display:block;margin:10px 0 4px;letter-spacing:-.04em}.stat small{color:var(--success);font-size:12px}.section{margin-top:28px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.section-head h2{font-size:18px}.link{border:0;background:transparent;color:var(--accent);font-size:13px}.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}.toolbar{display:flex;gap:10px;padding:14px;border-bottom:1px solid var(--line);flex-wrap:wrap}.field{height:40px;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);padding:0 11px;outline:0}.field:focus{border-color:var(--accent)}.search{flex:1;min-width:200px}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}.table th{font-size:11px;color:var(--subtle);text-transform:uppercase;letter-spacing:.08em;font-weight:700}.table tr:last-child td{border-bottom:0}.table td small{display:block;color:var(--subtle);margin-top:3px}.status{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;background:var(--surface2);color:var(--muted);font-size:11px}.status:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}.status.active{color:var(--success)}.status.pending{color:var(--warn)}.status.revoked{color:var(--danger)}.row-action{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:var(--radius);padding:7px 10px;font-size:12px}.row-action:hover{border-color:var(--accent);color:var(--text)}.privacy{display:flex;gap:12px;align-items:flex-start;padding:16px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));border-top:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));color:var(--muted);font-size:13px;line-height:1.5}.privacy strong{display:block;color:var(--text);margin-bottom:3px}.toast{position:fixed;right:24px;bottom:24px;padding:12px 16px;background:var(--surface2);border:1px solid var(--line);border-radius:var(--radius);opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;font-size:13px}.toast.show{opacity:1;transform:none}
+    @media(max-width:900px){.shell{grid-template-columns:72px minmax(0,1fr)}.sidebar{padding:18px 10px;align-items:center}.brand{padding:0 0 24px}.brand div:last-child,.nav span,.sidebar-foot span,.operator div:last-child{display:none}.nav button,.sidebar-foot button{justify-content:center;padding:12px}.operator{padding:8px}.grid{grid-template-columns:repeat(2,1fr)}.main{padding:28px 20px}}
+    @media(max-width:639px){.shell{display:block}.sidebar{display:none}.sidebar.open{display:flex;position:fixed;inset:0 auto 0 0;width:280px;z-index:10;box-shadow:12px 0 32px rgba(0,0,0,.28)}.topbar{height:64px;padding:0 16px}.menu{display:block}.main{padding:24px 16px}.intro{align-items:flex-start;flex-direction:column;margin-bottom:22px}.intro h1{font-size:24px}.grid{grid-template-columns:1fr 1fr;gap:8px}.stat{padding:14px}.stat strong{font-size:24px}.table thead{display:none}.table,.table tbody,.table tr,.table td{display:block}.table tr{padding:14px 16px;border-bottom:1px solid var(--line)}.table tr:last-child{border-bottom:0}.table td{padding:5px 0;border:0;display:flex;justify-content:space-between;gap:16px}.table td:before{content:attr(data-label);color:var(--subtle);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.table td:first-child{display:block}.table td:first-child:before{display:none}.toolbar{display:grid;grid-template-columns:1fr 1fr}.toolbar .search{grid-column:1/-1}.section-head{align-items:flex-start}.privacy{padding:14px}.top-actions .icon:first-child{display:none}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+    /* Sovereign Heritage — Goama visual refinement */
+    :root{
+      --bg:#0F0F0F;--bg2:#151515;--surface:#1B1B1A;--surface2:#242321;
+      --line:#39352D;--text:#F5F5F5;--muted:#B9B9B9;--subtle:#918A7D;
+      --accent:#F5B700;--accentHover:#FFD15A;--success:#3C9C40;
+      --warn:#F59E0B;--danger:#D62828;--info:#38BDF8;
+      --radius:10px;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+      color-scheme:dark;
+    }
+    [data-theme=light]{
+      --bg:#F5F2EA;--bg2:#FFFEFA;--surface:#FFFFFF;--surface2:#F1EBDD;
+      --line:#DED5C4;--text:#211D16;--muted:#655D50;--subtle:#857B69;
+      --accent:#A97800;--accentHover:#8B6400;--success:#287B35;
+      --warn:#A76B12;--danger:#B52D2D;--info:#167BA5;color-scheme:light;
+    }
+    html,body{background:var(--bg)}
+    body{background-image:radial-gradient(ellipse at 78% -12%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 34rem)}
+    .sidebar{background:var(--bg2);border-right-color:var(--line);padding:28px 18px}
+    .brand{padding-bottom:34px}
+    .mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 17%,var(--surface)),transparent);border-color:var(--accent);color:var(--accent);box-shadow:0 0 24px color-mix(in srgb,var(--accent) 10%,transparent);font-size:18px}
+    .brand strong{font-size:18px;letter-spacing:.01em}
+    .brand small{letter-spacing:.09em;text-transform:uppercase;font-size:10px}
+    .nav{gap:6px}
+    .nav button,.sidebar-foot button{border-radius:9px;padding:12px 13px;transition:background .18s,border-color .18s,color .18s}
+    .nav button.active{background:color-mix(in srgb,var(--accent) 11%,var(--surface2));box-shadow:inset 3px 0 var(--accent);color:var(--text)}
+    .nav button.active:after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:auto}
+    .nav .count{background:color-mix(in srgb,var(--accent) 13%,var(--surface));padding:3px 7px;border-radius:99px;color:var(--accent);font-weight:700}
+    .operator{border-radius:12px;padding:13px;background:var(--surface);border-color:var(--line)}
+    .avatar{background:var(--accent);color:#2B1D00}
+    .topbar{height:72px;padding:0 clamp(18px,3vw,40px);background:color-mix(in srgb,var(--bg2) 92%,transparent);backdrop-filter:blur(14px)}
+    .crumb{letter-spacing:.01em}
+    .icon{border-radius:10px;background:var(--surface);transition:.18s}
+    .icon:hover{background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+    .main{max-width:1440px;padding:clamp(24px,3vw,44px)}
+    .eyebrow{color:var(--accent);letter-spacing:.16em}
+    .intro{margin-bottom:32px}
+    .intro h1{font-size:clamp(27px,3vw,34px);letter-spacing:-.045em}
+    .intro p{line-height:1.65}
+    .primary{background:var(--accent);border-color:var(--accent);color:#2B1D00;border-radius:9px;padding:12px 18px;box-shadow:0 5px 18px color-mix(in srgb,var(--accent) 16%,transparent);transition:transform .18s,background .18s,box-shadow .18s}
+    .primary:hover{background:var(--accentHover);transform:translateY(-1px);box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 22%,transparent)}
+    .grid{gap:16px}
+    .stat{position:relative;overflow:hidden;border-radius:14px;padding:21px;background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface) 86%,var(--bg)));box-shadow:0 8px 26px rgba(0,0,0,.13);transition:transform .2s,border-color .2s}
+    .stat:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+    .stat:after{content:"";position:absolute;width:90px;height:90px;right:-42px;top:-45px;border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:50%;box-shadow:0 0 0 12px color-mix(in srgb,var(--accent) 3%,transparent),0 0 0 24px color-mix(in srgb,var(--accent) 2%,transparent)}
+    .stat-label{font-size:12px;letter-spacing:.02em}
+    .stat strong{font-size:31px;letter-spacing:-.055em;margin:13px 0 5px}
+    .section{margin-top:34px}
+    .section-head{margin-bottom:15px}
+    .section-head h2{font-size:18px;letter-spacing:-.02em}
+    .link{font-weight:600}
+    .panel{border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.13)}
+    .toolbar{padding:16px;gap:10px}
+    .field{height:42px;border-radius:9px;background:var(--bg2)}
+    .field:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 17%,transparent)}
+    .table th,.table td{padding:16px 18px}
+    .table th{background:color-mix(in srgb,var(--surface2) 65%,transparent)}
+    .table tbody tr{transition:background .15s}
+    .table tbody tr:hover{background:color-mix(in srgb,var(--accent) 4%,transparent)}
+    .status{padding:6px 10px;font-weight:600;letter-spacing:.01em}
+    .status.active{background:color-mix(in srgb,var(--success) 12%,var(--surface2))}
+    .status.pending{background:color-mix(in srgb,var(--warn) 12%,var(--surface2))}
+    .status.revoked{background:color-mix(in srgb,var(--danger) 12%,var(--surface2))}
+    .row-action{border-radius:8px;padding:8px 12px;font-weight:600}
+    .privacy{padding:18px 20px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));border-top-color:color-mix(in srgb,var(--accent) 23%,var(--line))}
+    .privacy>span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:color-mix(in srgb,var(--success) 17%,var(--surface));color:var(--success);font-weight:800;flex:0 0 25px}
+    .toast{border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.3)}
+    @media(max-width:900px){.sidebar{padding:22px 10px}.main{padding:28px 20px}}
+    @media(max-width:639px){.main{padding:23px 16px}.stat{border-radius:12px}.stat strong{font-size:25px}.intro{gap:16px}.intro .primary{width:100%}.panel{border-radius:12px}.table tr{padding:13px 16px}}
+
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation administrative">
+      <div class="brand"><div class="mark">G</div><div><strong>Goama</strong><small>Administration</small></div></div>
+      <nav class="nav">
+        <button class="active" type="button"><span>Tableau de bord</span></button>
+        <button type="button"><span>Agents</span><span class="count">248</span></button>
+        <button type="button"><span>Préinscriptions</span><span class="count">12</span></button>
+        <button type="button"><span>Codes d’activation</span></button>
+        <button type="button"><span>Révocations</span></button>
+        <button type="button"><span>Suivi des retraits</span></button>
+        <button type="button"><span>Journal d’audit</span></button>
+        <button type="button"><span>Paramètres</span></button>
+      </nav>
+      <div class="sidebar-foot"><button id="themeToggle" type="button"><span>☼</span><span>Thème clair</span></button><div class="operator"><div class="avatar">LM</div><div><strong>Louise Martin</strong><small>Administratrice</small></div></div></div>
+    </aside>
+    <div class="content">
+      <header class="topbar"><button class="icon menu" type="button" aria-label="Ouvrir la navigation">☰</button><div class="crumb">Goama Admin <span>/</span> <b>Tableau de bord</b></div><div class="top-actions"><button class="icon" type="button" aria-label="Notifications">◌</button><button class="icon" type="button" aria-label="Aide">?</button></div></header>
+      <main class="main">
+        <div class="intro"><div><p class="eyebrow">Vue administrative</p><h1>Tableau de bord</h1><p>Un aperçu des comptes et des actions à traiter.</p></div><button class="primary" type="button" id="newAgent">Préinscrire un agent</button></div>
+        <section class="grid" aria-label="Indicateurs"><article class="stat"><span class="stat-label">Comptes enregistrés</span><strong>248</strong><small>+8 ce mois</small></article><article class="stat"><span class="stat-label">Comptes actifs</span><strong>231</strong><small>93,1 % du total</small></article><article class="stat"><span class="stat-label">À activer</span><strong>12</strong><small style="color:var(--warn)">À examiner</small></article><article class="stat"><span class="stat-label">Accès révoqués</span><strong>5</strong><small style="color:var(--subtle)">Ce mois</small></article></section>
+        <section class="section"><div class="section-head"><h2>Agents récemment enregistrés</h2><button class="link" type="button" id="allAgents">Voir tous les agents →</button></div><div class="panel"><div class="toolbar"><input class="field search" id="agentSearch" placeholder="Rechercher un agent" aria-label="Rechercher un agent"><select class="field" aria-label="Filtrer par statut"><option>Tous les statuts</option><option>Actif</option><option>En attente</option><option>Révoqué</option></select><button class="row-action" type="button" id="filterButton">Filtrer</button></div><table class="table"><thead><tr><th>Agent</th><th>Ministère</th><th>Statut</th><th>Dernière activité</th><th></th></tr></thead><tbody id="agents"><tr><td data-label="Agent"><b>Claire Dubois</b><small>claire.dubois@goama.fr</small></td><td data-label="Ministère">Services publics</td><td data-label="Statut"><span class="status active">Actif</span></td><td data-label="Dernière activité">Aujourd’hui, 10:42</td><td><button class="row-action revoke" type="button">Gérer</button></td></tr><tr><td data-label="Agent"><b>Marc Lefèvre</b><small>marc.lefevre@goama.fr</small></td><td data-label="Ministère">Transition écologique</td><td data-label="Statut"><span class="status pending">En attente</span></td><td data-label="Dernière activité">Hier, 16:20</td><td><button class="row-action revoke" type="button">Gérer</button></td></tr><tr><td data-label="Agent"><b>Sophie Bernard</b><small>sophie.bernard@goama.fr</small></td><td data-label="Ministère">Affaires sociales</td><td data-label="Statut"><span class="status active">Actif</span></td><td data-label="Dernière activité">Lun., 09:14</td><td><button class="row-action revoke" type="button">Gérer</button></td></tr></tbody></table><div class="privacy"><span>✓</span><div><strong>Confidentialité préservée</strong>Cette vue ne contient aucun message, aperçu de conversation ou pièce jointe. Les journaux restent limités aux actions administratives.</div></div></div></section>
+        <section class="section"><div class="section-head"><h2>À traiter</h2><button class="link" type="button">Consulter les demandes →</button></div><div class="panel"><div class="toolbar" style="border:0"><span class="status pending">12 préinscriptions à examiner</span><span class="status active">3 actions confirmées aujourd’hui</span></div></div></section>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script>
+    const toast=document.getElementById('toast'), sidebar=document.querySelector('.sidebar');function notify(t){toast.textContent=t;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2200)}
+    const savedTheme=localStorage.getItem('goama-theme');if(savedTheme){document.documentElement.dataset.theme=savedTheme;document.querySelector('#themeToggle span:last-child').textContent=savedTheme==='light'?'Thème sombre':'Thème clair'}
+    document.getElementById('themeToggle').addEventListener('click',()=>{const h=document.documentElement,l=h.dataset.theme==='light';h.dataset.theme=l?'dark':'light';localStorage.setItem('goama-theme',h.dataset.theme);document.querySelector('#themeToggle span:last-child').textContent=l?'Thème clair':'Thème sombre'});
+    document.querySelector('.menu').addEventListener('click',()=>sidebar.classList.toggle('open'));
+    document.querySelectorAll('.nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));button.classList.add('active');sidebar.classList.remove('open');notify(`${button.textContent.trim().replace(/\s+\d+$/,'')} sélectionné.`)}));
+    document.getElementById('newAgent').addEventListener('click',()=>notify('Le formulaire de préinscription est prêt à être ouvert.'));
+    document.getElementById('allAgents').addEventListener('click',()=>notify('La liste complète des agents sera affichée ici.'));
+    document.getElementById('filterButton').addEventListener('click',()=>{applyAgentFilters();notify('Les filtres ont été appliqués.');});
+    const statusSelect=document.querySelector('.toolbar select');statusSelect.addEventListener('change',applyAgentFilters);
+    function applyAgentFilters(){const q=document.getElementById('agentSearch').value.toLowerCase();const status=statusSelect.value;document.querySelectorAll('#agents tr').forEach(r=>{const textMatch=r.textContent.toLowerCase().includes(q);const statusMatch=status==='Tous les statuts'||r.querySelector('.status')?.textContent.trim()===status;r.hidden=!(textMatch&&statusMatch);});}
+    document.querySelectorAll('.revoke').forEach(b=>b.addEventListener('click',()=>{if(confirm('Ouvrir la fiche administrative de cet agent ?'))notify('Fiche administrative ouverte.');}));
+    document.getElementById('agentSearch').addEventListener('input',applyAgentFilters);
+  </script>
+</body>
+</html>
