@@ -1,0 +1,41 @@
+# =====================================================================
+# Goama — hébergement souverain en UNE COMMANDE :  docker compose up -d
+# Aucun service tiers : PostgreSQL + API, tout tourne sur l'infrastructure
+# maîtrisée. (Exigence §3 « Hébergement souverain » du cahier des charges.)
+# =====================================================================
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: goama
+      POSTGRES_PASSWORD: goama          # compte de démonstration ; changer en production
+      POSTGRES_DB: goama
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goama -d goama"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://goama:goama@db:5432/goama
+      # En production : fournir JWT_SECRET via `docker compose --env-file` ou Docker secrets
+      JWT_SECRET: ${JWT_SECRET:-changez-moi-en-production}
+      FILES_DIR: /data/files
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - filedata:/data/files            # blobs chiffrés (repli du sprint, cf. doc 06 §2)
+    depends_on:
+      db:
+        condition: service_healthy
+    # Migrations appliquées au démarrage (REQ-OPS-001), puis l'API démarre
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
+
+volumes:
+  pgdata: {}
+  filedata: {}

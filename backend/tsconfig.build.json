@@ -1,0 +1,12 @@
+// Build de production : compile UNIQUEMENT src/ vers dist/
+// (seed/ et scripts/ sont exécutés via tsx, pas besoin de les compiler).
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,167 @@
+// =====================================================================
+// Schéma de données Goama
+// PRINCIPE DIRECTEUR : le serveur ne stocke AUCUN contenu en clair.
+// Les messages, les noms de groupes et les clés de fichiers ne sont que
+// des blobs chiffrés opaques (base64) que le serveur ne sait pas ouvrir.
+// (Épreuve du jury « Le serveur ne lit rien » — règle éliminatoire.)
+// =====================================================================
+
+// Prisma 7 : l'URL de connexion vit dans prisma.config.ts (CLI/migrations),
+// et le client reçoit un adaptateur de pilote à la construction (plugins/db.ts).
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Rôles et statuts -------------------------------------------------
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum Statut {
+  PRE_INSCRIT // pré-inscrit par l'Administrateur, pas encore activé
+  ACTIF // activé (code + secret + TOTP), peut se connecter
+  REVOQUE // révoqué : plus AUCUN accès, sur tous les appareils (épreuve « Révocation »)
+}
+
+enum RoleMembre {
+  PARRAIN // a validé le groupe, co-gère les membres (ADR-13)
+  MEMBRE
+}
+
+// --- Identité ---------------------------------------------------------
+
+model Agent {
+  id         String    @id @default(uuid())
+  matricule  String    @unique // identifiant professionnel — réservé à l'Administrateur
+  nom        String
+  prenom     String
+  ministere  String // donnée d'annuaire (fictive au sprint) : la métadonnée ASSUMÉE (doc 06 §9)
+  fonction   String
+  categorie  String // catégorie de poste (P, A, B…) — base du parrainage (ADR-12)
+  role       Role      @default(AGENT)
+  statut     Statut    @default(PRE_INSCRIT)
+  secretHash String? // hash scrypt du secret personnel — le secret en clair n'est JAMAIS stocké
+  totpSecret String? // secret TOTP (base32) : requis par la vérification côté serveur (RFC 6238)
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  sessions       Session[]
+  keyPackages    KeyPackage[]
+  memberships    GroupMember[]
+  messages       Message[]
+  codeActivation CodeActivation? // code d'activation courant (un seul par agent)
+}
+
+// Code d'activation à usage unique, valable 24 h (ADR-15, REQ-ID-002).
+model CodeActivation {
+  id        String    @id @default(uuid())
+  agentId   String    @unique // un seul code actif par agent
+  agent     Agent     @relation(fields: [agentId], references: [id])
+  codeHash  String    @unique // SHA-256 du code : le code en clair n'est jamais stocké
+  expiresAt DateTime
+  usedAt    DateTime? // usage unique
+  createdAt DateTime  @default(now())
+}
+
+// Session unique : une seule connexion active par agent (ADR-07).
+model Session {
+  id        String    @id @default(uuid()) // sert de « jti » dans le JWT
+  agentId   String
+  agent     Agent     @relation(fields: [agentId], references: [id])
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime? // toute nouvelle connexion révoque les sessions précédentes
+
+  @@index([agentId])
+}
+
+// --- Groupes et messages ---------------------------------------------
+
+model Group {
+  id        String   @id @default(uuid())
+  epoch     Int      @default(0) // état MLS du groupe : un commit par epoch, sinon 409
+  createdBy String // id de l'agent créateur (devient parrain)
+  createdAt DateTime @default(now())
+
+  members  GroupMember[]
+  messages Message[]
+
+  // AUCUN champ « nom » : le nom du groupe voyage chiffré dans un message
+  // de type « nom_groupe » (REQ-GRP-006). L'inspection de cette table ne révèle rien.
+}
+
+model GroupMember {
+  groupeId  String
+  agentId   String
+  group     Group      @relation(fields: [groupeId], references: [id])
+  agent     Agent      @relation(fields: [agentId], references: [id])
+  role      RoleMembre @default(MEMBRE)
+  addedAt   DateTime   @default(now())
+  removedAt DateTime? // sortie du groupe (révocation, retrait par le parrain)
+
+  @@id([groupeId, agentId])
+  @@index([groupeId])
+}
+
+// KeyPackage MLS (RFC 9420) sérialisé : le serveur le stocke et le relaie
+// SANS pouvoir le comprendre. C'est le carnet d'adresses cryptographique.
+model KeyPackage {
+  id        String   @id @default(uuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  payload   String // base64 — OPAQUE pour le serveur
+  createdAt DateTime @default(now())
+
+  @@index([agentId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  groupeId  String
+  group     Group    @relation(fields: [groupeId], references: [id])
+  senderId  String
+  sender    Agent    @relation(fields: [senderId], references: [id])
+  seq       Int // numéro de séquence PAR GROUPE, attribué en transaction (garantie d'ordre)
+  epoch     Int // epoch déclaré par le client, comparé à Groupe.epoch
+  kind      String   @default("mls_app") // mls_app | mls_commit | recu_lu | nom_groupe | media_cle
+  content   String // blob chiffré base64 — le serveur NE PEUT PAS le lire
+  createdAt DateTime @default(now())
+
+  @@unique([groupeId, seq])
+  @@index([groupeId, seq])
+}
+
+// --- Fichiers chiffrés ------------------------------------------------
+
+// Seul le BLOB chiffré est stocké (volume Docker, repli MinIO du sprint).
+// La clé AES-GCM du fichier voyage dans un message MLS « media_cle » :
+// le serveur n'a donc jamais accès ni au contenu ni à la clé.
+model MediaObject {
+  id          String   @id @default(uuid())
+  groupeId    String
+  uploaderId  String
+  taille      Int
+  sha256      String // intégrité du blob chiffré (pas de son contenu)
+  storagePath String
+  createdAt   DateTime @default(now())
+}
+
+// --- Journal d'audit --------------------------------------------------
+
+// Actions sensibles uniquement : identifiants et type d'action, JAMAIS de contenu.
+// Conservation 90 jours (ADR-17), purge automatique par jobs/purge.ts.
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String? // id d'agent si l'action vient d'un humain
+  action    String // "pre_inscription", "activation", "connexion", "revocation"…
+  detail    String? // identifiants techniques, jamais de contenu de message
+  createdAt DateTime @default(now())
+}
