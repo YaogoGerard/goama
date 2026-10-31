@@ -387,7 +387,7 @@ par rapport à la doc d'architecture (`06_architecture_decisions.md`) :
 | Redis (présence, blacklist, compteurs) | en mémoire, une instance | ADR-04, P2 |
 | MinIO | volume Docker local (repli prévu §2) | ADR-06 |
 | BullMQ | `setInterval` (purge) | ADR-05 |
-| Matrice des postes pour le parrainage | tout agent ACTIF peut créer | ADR-12 en P1 |
+| Matrice des postes pour le parrainage | **Implémentée** : `src/lib/parrainage.ts` vérifie le poste officiel (REQ-AUTHZ-005 P0) | — |
 | Frontal Caddy + TLS | exposition directe du port API | §10 de la doc 06 |
 | Padding systématique des messages | à vérifier dans la liaison OpenMLS | §9 de la doc 06 |
 

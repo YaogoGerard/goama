@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { construireApp } from "../src/app.js";
 import {
   creerAgentActif,
+  creerParrain,
   entete,
   jetonAdmin,
   suffixeUnique,
@@ -61,7 +62,8 @@ describe("Épreuve : l'intrus est rejeté", () => {
 
   it("refuse d'ajouter un agent non enrôlé dans un groupe", async () => {
     const admin = await jetonAdmin(app);
-    const a = await creerAgentActif(app, admin, `TEST-${suffixe}-I1`);
+    // Parrain habilité (Chef de Service) pour créer le groupe
+    const a = await creerParrain(app, admin, `TEST-${suffixe}-I1`);
     const g = await app.inject({ method: "POST", url: "/groupes", headers: entete(a.jeton) });
     const groupeId = g.json().id;
 
@@ -77,7 +79,8 @@ describe("Épreuve : l'intrus est rejeté", () => {
 
   it("interdit à un non-membre de lire les messages d'un groupe", async () => {
     const admin = await jetonAdmin(app);
-    const a = await creerAgentActif(app, admin, `TEST-${suffixe}-I2`);
+    // a est parrain (peut créer un groupe), b est un agent simple (ne peut pas)
+    const a = await creerParrain(app, admin, `TEST-${suffixe}-I2`);
     const b = await creerAgentActif(app, admin, `TEST-${suffixe}-I3`);
 
     const g = await app.inject({ method: "POST", url: "/groupes", headers: entete(a.jeton) });

@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { construireApp } from "../src/app.js";
 import { prisma } from "../src/plugins/db.js";
-import { creerAgentActif, entete, jetonAdmin, suffixeUnique } from "./communs.js";
+import { creerAgentActif, creerParrain, entete, jetonAdmin, suffixeUnique } from "./communs.js";
 
 let app: FastifyInstance;
 const suffixe = suffixeUnique();
@@ -27,7 +27,8 @@ beforeAll(async () => {
 describe("Épreuve : le serveur ne lit rien", () => {
   it("stocke les messages en blobs opaques, sans aucun clair en base", async () => {
     const admin = await jetonAdmin(app);
-    const a = await creerAgentActif(app, admin, `TEST-${suffixe}-A`);
+    // a est parrain (Chef de Service) pour pouvoir créer le groupe
+    const a = await creerParrain(app, admin, `TEST-${suffixe}-A`);
     const b = await creerAgentActif(app, admin, `TEST-${suffixe}-B`);
 
     // A crée un groupe, y ajoute B, envoie un "message chiffré"
@@ -87,7 +88,8 @@ describe("Épreuve : le serveur ne lit rien", () => {
 
   it("refuse un commit d'epoch périmé (409) : l'ordre du groupe est inattaquable", async () => {
     const admin = await jetonAdmin(app);
-    const a = await creerAgentActif(app, admin, `TEST-${suffixe}-C`);
+    // Parrain pour créer le groupe
+    const a = await creerParrain(app, admin, `TEST-${suffixe}-C`);
     const g = await app.inject({ method: "POST", url: "/groupes", headers: entete(a.jeton) });
     const groupeId = g.json().id;
 

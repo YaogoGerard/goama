@@ -4,3 +4,6 @@ data/
 .env
 *.log
 src/generated/
+backend/src/generated/
+.pgdata/
+backend/.pgdata/

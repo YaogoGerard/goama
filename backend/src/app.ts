@@ -84,7 +84,14 @@ export async function construireApp(): Promise<FastifyInstance> {
     global: true,
     max: config.GLOBAL_RATE_MAX,
     timeWindow: "1 minute",
-    errorResponseBuilder: () => ({ erreur: "trop_de_requetes" }), // 429 sans détail interne
+    // REQ-ABUSE-004 (P0) : 429 avec Retry-After, sans détail interne.
+    // addHeadersOnExceeding expose Retry-After même avant le dépassement ;
+    // addHeaders l'expose lors du refus → les deux sont nécessaires.
+    addHeadersOnExceeding: { "x-ratelimit-limit": true, "x-ratelimit-remaining": true, "x-ratelimit-reset": true },
+    addHeaders: { "x-ratelimit-limit": true, "x-ratelimit-remaining": true, "x-ratelimit-reset": true, "retry-after": true },
+    errorResponseBuilder: (_req, context) => {
+      return { erreur: "trop_de_requetes", retryAfter: context.after };
+    },
   });
 
   await app.register(jwt, { secret: config.JWT_SECRET });

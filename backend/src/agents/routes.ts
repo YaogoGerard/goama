@@ -16,10 +16,18 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
   });
 
   // ---- Révocation immédiate (Administrateur uniquement) ----------------
-  app.post("/agents/:id/revoquer", { preHandler: [app.requireAuth, app.requireAdmin] }, async (req) => {
-    const { id } = req.params as { id: string };
-    return revoquerAgent(id, req.agent!.id);
-  });
+  // REQ-ABUSE-007 (P1) : 30 opérations d'administration / minute
+  app.post(
+    "/agents/:id/revoquer",
+    {
+      preHandler: [app.requireAuth, app.requireAdmin],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return revoquerAgent(id, req.agent!.id);
+    },
+  );
 
   // ---- Présence : agents en ligne parmi MES groupes ---------------------
   // En mémoire (une instance au sprint) ; JAMAIS stockée en base (doc 06 §8).

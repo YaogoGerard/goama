@@ -45,12 +45,20 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
   });
 
   // ---- Messages (blobs chiffrés MLS) ------------------------------------
-  app.post("/groupes/:id/messages", { preHandler: [app.requireAuth] }, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const corps = validerCorps(SchemaMessage, req.body);
-    const resultat = await posterMessage(id, req.agent!, corps);
-    return reply.code(201).send(resultat);
-  });
+  // REQ-ABUSE-002 (P1) : 60 messages / minute / session
+  app.post(
+    "/groupes/:id/messages",
+    {
+      preHandler: [app.requireAuth],
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const corps = validerCorps(SchemaMessage, req.body);
+      const resultat = await posterMessage(id, req.agent!, corps);
+      return reply.code(201).send(resultat);
+    },
+  );
 
   app.get("/groupes/:id/messages", { preHandler: [app.requireAuth] }, async (req) => {
     const { id } = req.params as { id: string };
@@ -68,10 +76,18 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
     return reply.code(201).send(publierKeyPackage(req.agent!.id, corps.payload));
   });
 
-  app.get("/key-packages/:agentId", { preHandler: [app.requireAuth] }, async (req) => {
-    const { agentId } = req.params as { agentId: string };
-    const query = req.query as { nombre?: string };
-    const nombre = Number.parseInt(query.nombre ?? "1", 10) || 1;
-    return prendreKeyPackages(agentId, nombre);
-  });
+  // REQ-ABUSE-003 (P1) : 30 récupérations de KeyPackages / minute / demandeur
+  app.get(
+    "/key-packages/:agentId",
+    {
+      preHandler: [app.requireAuth],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (req) => {
+      const { agentId } = req.params as { agentId: string };
+      const query = req.query as { nombre?: string };
+      const nombre = Number.parseInt(query.nombre ?? "1", 10) || 1;
+      return prendreKeyPackages(agentId, nombre);
+    },
+  );
 }

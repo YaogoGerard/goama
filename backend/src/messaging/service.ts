@@ -18,6 +18,7 @@ import { journaliser } from "../plugins/audit.js";
 import { relais } from "./relay.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { KINDS } from "./schemas.js";
+import { estHabiliteParrain } from "../lib/parrainage.js";
 
 // Vérifie que l'agent est membre ACTIF du groupe, sinon 403 (épreuve Intrus)
 async function exigerMembre(groupeId: string, agentId: string) {
@@ -36,10 +37,16 @@ async function exigerParrain(groupeId: string, agentId: string) {
 
 // ---- Groupes -----------------------------------------------------------
 
-// Création : tout agent ACTIF peut créer un groupe et en devient parrain.
-// Simplification du sprint (ADR-12 assoupli) : la matrice des postes
-// habilités est un P1 ; chaque création reste auditée.
+// Création : seul un agent dont le POSTE OFFICIEL (fonction) confère la
+// capacité de parrainage peut créer un groupe directement (REQ-AUTHZ-005 P0).
+// Un agent non habilité doit passer par une demande (REQ-AUTHZ-006 P0).
+// Référence matrice : src/lib/parrainage.ts.
 export async function creerGroupe(agentId: string) {
+  const agent = await prisma.agent.findUniqueOrThrow({ where: { id: agentId } });
+  if (!estHabiliteParrain(agent.fonction)) {
+    throw new ErreurApi(403, "parrainage_requis"); // poste non habilité
+  }
+
   const groupe = await prisma.group.create({ data: { createdBy: agentId } });
   await prisma.groupMember.create({
     data: { groupeId: groupe.id, agentId, role: "PARRAIN" },

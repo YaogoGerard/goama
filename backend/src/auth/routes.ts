@@ -10,9 +10,13 @@ import { config } from "../config.js";
 
 export function enregistrerRoutesAuth(app: FastifyInstance) {
   // ---- 1. Pré-inscription (Administrateur uniquement) ------------------
+  // REQ-ABUSE-007 (P1) : 30 opérations d'administration / minute
   app.post(
     "/auth/pre-inscriptions",
-    { preHandler: [app.requireAuth, app.requireAdmin] },
+    {
+      preHandler: [app.requireAuth, app.requireAdmin],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
     async (req, reply) => {
       const corps = validerCorps(SchemaPreInscription, req.body);
       const resultat = await preInscrire(corps, req.agent!.id);
@@ -39,6 +43,8 @@ export function enregistrerRoutesAuth(app: FastifyInstance) {
 
   // ---- 4. Déconnexion ---------------------------------------------------
   app.post("/auth/deconnexion", { preHandler: [app.requireAuth] }, async (req) => {
+    // req.user.jti est le payload JWT décodé par @fastify/jwt (jti = id de session)
+    // On l'utilise directement plutôt que req.agent car la session est déjà validée par requireAuth.
     await deconnecter(req.user.jti); // jti = session courante
     return { ok: true };
   });

@@ -18,11 +18,15 @@
 import { createHash } from "node:crypto";
 import { prisma } from "../plugins/db.js";
 import { journaliser } from "../plugins/audit.js";
-import { codeActivationAleatoire, hasherSecret, verifierSecret } from "../lib/crypto.js";
+import { codeActivationAleatoire, hasherSecret, verifierSecret, scryptFactice } from "../lib/crypto.js";
 import { genererSecretTotp, uriTotp, verifierCodeTotp } from "../lib/totp.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { config } from "../config.js";
 import type { PayloadJeton, RoleApp } from "../types.js";
+
+// Constantes de la politique de verrouillage (REQ-ID-005)
+const MAX_TENTATIVES = 5;
+const DUREE_VERROU_MS = 15 * 60 * 1_000; // 15 minutes
 
 function dansUnNombreHeures(heures: number): Date {
   return new Date(Date.now() + heures * 3_600_000);
@@ -89,25 +93,65 @@ export async function activer(donnees: { matricule: string; code: string; secret
 // 3) Connexion : les DEUX facteurs sont vérifiés, puis une session neuve
 //    est créée et toutes les sessions actives précédentes sont révoquées
 //    (session unique — ADR-07 : un seul appareil par agent).
+//
+//  Timing : quand le compte n'existe pas, on exécute un scrypt factice
+//  pour que la durée de réponse soit identique à celle d'un mauvais mdp
+//  (REQ-SEC — anti-timing-leak). L'erreur reste toujours "identifiants_invalides".
+//
+//  Verrouillage TOTP (REQ-ID-005) : après MAX_TENTATIVES codes TOTP erronés
+//  consécutifs, le compte est verrouillé DUREE_VERROU_MS. Un succès remet le
+//  compteur à zéro. L'erreur est la même ("identifiants_invalides") pour ne
+//  pas signaler l'état du verrou à un attaquant.
 export async function connecter(
   donnees: { matricule: string; secret: string; codeTotp: string },
   signer: (payload: PayloadJeton) => string,
 ) {
   const agent = await prisma.agent.findUnique({ where: { matricule: donnees.matricule } });
 
-  // Vérification des deux facteurs. Simplification assumée du sprint : en
-  // cas de compte inexistant, aucun scrypt factice n'est calculé — la
-  // réponse reste un 401 générique dans tous les cas d'échec.
-  const secretOk = agent?.secretHash ? verifierSecret(donnees.secret, agent.secretHash) : false;
-  const totpOk = agent?.totpSecret
+  // Scrypt factice si compte inexistant → durée de réponse homogène (anti-timing)
+  if (!agent || !agent.secretHash) {
+    scryptFactice(donnees.secret);
+    throw new ErreurApi(401, "identifiants_invalides");
+  }
+
+  // Vérification du premier facteur (secret personnel — scrypt)
+  const secretOk = verifierSecret(donnees.secret, agent.secretHash);
+
+  // Compte verrouillé ? (REQ-ID-005)
+  const maintenant = Date.now();
+  const verrouilleJusqua = agent.verrouilleJusqua?.getTime() ?? 0;
+  const estVerrouille = verrouilleJusqua > maintenant;
+
+  // Vérification du second facteur (TOTP) — fait même si verrouillé pour
+  // ne pas court-circuiter le timing, mais le résultat est ignoré si verrouillé.
+  const totpOk = agent.totpSecret
     ? verifierCodeTotp(agent.totpSecret, agent.matricule, donnees.codeTotp)
     : false;
 
-  // Un seul message d'erreur, quel que soit le facteur en échec :
-  // impossible de savoir si c'est le matricule, le secret ou le TOTP.
-  if (!agent || agent.statut !== "ACTIF" || !secretOk || !totpOk) {
+  // Échec d'authentification : mauvais statut, secret faux ou compte verrouillé
+  if (agent.statut !== "ACTIF" || !secretOk || estVerrouille) {
     throw new ErreurApi(401, "identifiants_invalides");
   }
+
+  // Second facteur incorrect : incrémenter le compteur (REQ-ID-005)
+  if (!totpOk) {
+    const nouvelles = agent.tentativesConnexion + 1;
+    await prisma.agent.update({
+      where: { id: agent.id },
+      data: {
+        tentativesConnexion: nouvelles,
+        // Verrouillage déclenché dès MAX_TENTATIVES tentatives consécutives
+        verrouilleJusqua: nouvelles >= MAX_TENTATIVES ? new Date(maintenant + DUREE_VERROU_MS) : agent.verrouilleJusqua,
+      },
+    });
+    throw new ErreurApi(401, "identifiants_invalides");
+  }
+
+  // Succès : réinitialiser le compteur de tentatives et le verrou
+  await prisma.agent.update({
+    where: { id: agent.id },
+    data: { tentativesConnexion: 0, verrouilleJusqua: null },
+  });
 
   // Session unique : fermeture de toutes les sessions actives précédentes
   await prisma.session.updateMany({
