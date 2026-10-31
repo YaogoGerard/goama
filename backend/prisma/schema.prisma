@@ -49,9 +49,11 @@ model Agent {
   role       Role      @default(AGENT)
   statut     Statut    @default(PRE_INSCRIT)
   secretHash String? // hash scrypt du secret personnel — le secret en clair n'est JAMAIS stocké
-  totpSecret String? // secret TOTP (base32) : requis par la vérification côté serveur (RFC 6238)
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  totpSecret            String? // secret TOTP (base32) : requis par la vérification côté serveur (RFC 6238)
+  tentativesConnexion   Int       @default(0) // compteur de codes TOTP erronés consécutifs (REQ-ID-005)
+  verrouilleJusqua      DateTime? // si non null et dans le futur → compte verrouillé 15 min (REQ-ID-005)
+  revokedAt             DateTime?
+  createdAt             DateTime  @default(now())
 
   sessions       Session[]
   keyPackages    KeyPackage[]

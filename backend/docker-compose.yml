@@ -10,8 +10,10 @@ services:
       POSTGRES_USER: goama
       POSTGRES_PASSWORD: goama          # compte de démonstration ; changer en production
       POSTGRES_DB: goama
+    ports:
+      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./.pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U goama -d goama"]
       interval: 5s

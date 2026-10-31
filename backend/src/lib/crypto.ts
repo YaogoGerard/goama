@@ -1,11 +1,3 @@
-// =====================================================================
-// Primitives cryptographiques standard de Node.js — AUCUNE crypto
-// « maison » (règle éliminatoire du cahier des charges). On assemble :
-//   - scrypt  : dérivation de clé pour hacher les secrets personnels
-//               (KDF standard, conçu pour résister aux attaques par GPU)
-//   - randomBytes : génération aléatoire cryptographique (code d'activation)
-//   - SHA-256 : hachage du code d'activation et intégrité des fichiers
-// =====================================================================
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 // Hache un secret personnel. Format stocké : "scrypt$<sel>$<empreinte>".
@@ -25,6 +17,14 @@ export function verifierSecret(secret: string, stocke: string): boolean {
   const calculee = scryptSync(secret, sel, 64);
   const attendue = Buffer.from(empreinte, "hex");
   return calculee.length === attendue.length && timingSafeEqual(calculee, attendue);
+}
+
+// Scrypt factice — appelé quand le compte n'existe pas (REQ-SEC anti-timing).
+// Garantit que la durée de réponse est identique à celle d'un mauvais mot de passe,
+// rendant impossible la détection d'un matricule inexistant par chronométrage.
+export function scryptFactice(secret: string): void {
+  // Sel et empreinte constants arbitraires ; le résultat est jeté.
+  scryptSync(secret, "sel-factice-goama", 64);
 }
 
 // Code d'activation à usage unique (8 caractères) — envoyé par e-mail
