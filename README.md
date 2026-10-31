@@ -1,77 +1,145 @@
-# Goama — Documentation du projet
+<p align="center">
+  <img src="docs/design/logo.png" alt="Logo Goama" width="180">
+</p>
 
-**Messagerie administrative souveraine, chiffrée de bout en bout**
-**Version :** 0.5 — 31 octobre 2026 · **Statut :** base de travail à valider par l'équipe
-**Contexte :** Hackathon 226, sprint pré-hackathon 2026 (MTDPCE / DGTD, Burkina Faso) — équipe de 3, moins d'une semaine
+<h1 align="center">Goama</h1>
 
-## Méthode
+[![Vue.js](https://img.shields.io/badge/Vue.js-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Fastify](https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white)](https://fastify.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169e1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Tailwind CSS](https://img.shields.io/badge/Admin-Tailwind_CSS-06b6d4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![OpenMLS](https://img.shields.io/badge/E2EE-OpenMLS%20%2F%20WASM-7b42bc?logo=rust&logoColor=white)](https://openmls.tech/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](backend/LICENSE)
 
-Chaîne de la méthode SWE-FOUNDATIONS-BEFORE-CODE : **Exigence → Garantie → Responsabilité → Structure**, puis modèles et architecture. Les identifiants (REQ-…, G-…, INV-…, R-…, T-…) relient chaque étape à la suivante.
+**Goama** est un prototype de messagerie administrative souveraine pour le
+Hackathon 226 — édition 2026. Le projet fournit une API, une interface web et
+un espace d’administration déployables sur une infrastructure maîtrisée.
 
-## Fichiers
+> **Statut : prototype de sprint.** Les fonctions de chiffrement de bout en
+> bout et de messagerie complète doivent encore être intégrées et validées
+> avant toute présentation comme solution conforme au socle de sécurité.
 
-| Fichier | Contenu |
-|---|---|
-| [`docs/00_foundation_engineering_mindset.md`](docs/00_foundation_engineering_mindset.md) | État d'esprit, définitions, règles propres au projet |
-| [`docs/01_requirements_prd.md`](docs/01_requirements_prd.md) | Problème, acteurs, innovations, périmètre |
-| [`docs/02_requirements_srs.md`](docs/02_requirements_srs.md) | Contraintes, exigences (nature, garantie, priorité), hypothèses |
-| [`docs/03_design_contract_invariants.md`](docs/03_design_contract_invariants.md) | Garanties G-01 à G-13, invariants, interdits, limites |
-| [`docs/04_transition_req_to_arch.md`](docs/04_transition_req_to_arch.md) | Responsabilités, regroupement, composants |
-| [`docs/05_modeling_uml_c4.md`](docs/05_modeling_uml_c4.md) | Modèles C4 et UML (Mermaid) |
-| [`docs/06_architecture_decisions.md`](docs/06_architecture_decisions.md) | Stack, décisions, débit, cache, métadonnées, déploiement, risques |
-| [`docs/07_acceptance_tests.md`](docs/07_acceptance_tests.md) | Tests, épreuves du jury, matrice de couverture |
-| [`docs/08_interfaces_api.md`](docs/08_interfaces_api.md) | Contrat d'API REST et WebSocket (fusion du brouillon, adapté aux décisions) |
-| [`docs/09_data_model.md`](docs/09_data_model.md) | Modèle de données (ERD fusion du brouillon, adapté aux décisions) |
-| `docs/design/` | Logos du projet |
+## Architecture
 
-## Décisions de l'équipe retenues
+```text
+┌──────────────┐     ┌──────────────┐
+│ Web :3000    │     │ Admin :5173  │
+│ Vue 3 +      │     │ Vue 3 +      │
+│ OpenMLS/WASM │     │ Tailwind CSS │
+│ Nginx        │     │ Nginx        │
+└──────┬───────┘     └──────┬───────┘
+       └──────────────┬─────┘
+                      │ /api
+               ┌──────▼──────┐
+               │ API :8080   │
+               │ Fastify     │
+               └──────┬──────┘
+                      │
+               ┌──────▼──────┐
+               │ PostgreSQL  │
+               └─────────────┘
+```
 
-| Sujet | Décision |
-|---|---|
-| Stack | Client web Vue.js 3 + OpenMLS en WebAssembly, API Fastify, PostgreSQL, Redis, BullMQ, MinIO, tableau de bord Vue.js |
-| Innovations | Accusés de lecture à valeur probante (1-1), présence et annuaire par ministère, classification des messages |
-| Rôles | Deux utilisateurs : l'**Agent** et l'**Administrateur**, plus la personne non enrôlée, qui n'a aucun droit |
-| Catégories | P, A, B, C, D, E, et « hors catégorie » ; la **capacité de parrainage** se déduit du **poste officiel**, jamais de la catégorie |
-| Parrainage | Un groupe n'est créé que par un parrain habilité, ou après validation de sa demande par un parrain — **sans contrainte de ministère ni de périmètre** |
-| Groupes | Créateur **et** parrain gèrent le groupe : membres, nom, co-parrains, suppression ; départ volontaire, suspension, reprise ; un groupe sans parrain est gelé |
-| Accusé « Lu » | **Signé par l'appareil enrôlé** (valeur probante technique) |
-| Classification | **Étiquette de niveau** (Normal, Diffusion restreinte, Confidentiel) affichée sur le message ; restrictions applicatives, jamais bloquant côté envoi |
-| Activation | Code à usage unique **par e-mail professionnel, valable 24 h** |
-| Second facteur | Récupération **par l'Administrateur** (révocation puis nouvel enrôlement) ; aucun code de secours en libre-service |
-| Appareil | Un seul par agent, une seule session à la fois |
-| Révocation | Coupure serveur **immédiate** et retrait cryptographique MLS dès qu'un membre du groupe est en ligne |
-| Comptes | **Jamais supprimés** ; contenu chiffré serveur purgé à 30 jours ; journaux conservés 90 jours |
-| Étape 0 | Premier Administrateur créé par une **commande d'amorçage** sur installation vierge |
-| Périmètre | Ordre du hackathon : tout le **P0** d'abord, l'intégralité du **P1** ensuite, aucun P2 |
-| API et ERD | Contrat d'API et modèle de données du dossier `brouillon/` **fusionnés** dans la documentation officielle (docs 08 et 09) |
-| Clés | IndexedDB, clé WebCrypto non extractible |
-| Risque accepté | Pas de plan B si OpenMLS en WebAssembly échoue |
+La stack complète est orchestrée par [`docker-compose.yml`](docker-compose.yml).
+Les services web et admin restent séparés ; le frontend public `web/` n’est pas
+modifié par la refonte de l’administration.
 
-## Conventions
+## Fonctionnalités actuelles
 
-**DOIT / NE DOIT PAS / DEVRAIT / PEUT** (RFC 2119). **P0** indispensable à la démonstration · **P1** si le temps le permet · **P2** conçu, non implémenté.
+- authentification administrateur avec mot de passe et TOTP ;
+- protocole E2EE retenu : MLS via OpenMLS compilé en WebAssembly côté client
+  (intégration à finaliser) ;
+- rôles, pré-inscription et suspension/révocation d’agents ;
+- journal d’audit et suivi des retraits ;
+- interface d’administration responsive avec thème clair/sombre ;
+- bootstrap automatique du premier administrateur au démarrage de l’API ;
+- déploiement local reproductible avec Docker Compose ;
+- tests backend et tests de l’interface admin.
 
-## Statut
+## Prérequis
 
-Cette documentation est une base de cadrage, pas une certification de sécurité. Rien n'y est présenté comme implémenté. Les diagrammes Mermaid n'ont pas été rendus automatiquement. Avant le dépôt, chaque affirmation de sécurité reprise dans les notes doit être vérifiée dans le code et par un test, et les licences (Redis, MinIO en particulier) relues.
+- Docker et Docker Compose ;
+- Git ;
+- OpenSSL, pour générer la clé JWT locale.
 
-## Lancer la stack Docker
+## Lancer le projet
 
-Depuis la racine du projet :
+Depuis la racine :
 
 ```bash
 openssl rand -hex 32 | sed 's/^/JWT_SECRET=/' > backend/.env
 docker compose up -d --build
 ```
 
-L'interface web est disponible sur `http://localhost:3000` et l'interface admin sur
-`http://localhost:5173`. L'API répond sur `http://localhost:8080`; les requêtes `/api`
-des deux interfaces sont relayées vers l'API par Nginx.
+Adresses locales :
 
-Les valeurs par défaut de PostgreSQL sont destinées au développement local. Définir
-`POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_DB` avant une utilisation en production.
-Le fichier `backend/.env` contient la clé JWT locale et ne doit pas être versionné.
-Au premier démarrage, l'API crée automatiquement un administrateur si aucun
-administrateur n'existe. Les valeurs peuvent être personnalisées dans
-`backend/.env` avec `ADMIN_MATRICULE` et `ADMIN_PASSWORD`. Le secret TOTP est
-affiché uniquement dans les logs du premier démarrage.
+| Service | Adresse |
+|---|---|
+| Application web | http://localhost:3000 |
+| Administration | http://localhost:5173 |
+| API | http://localhost:8080 |
+| PostgreSQL | localhost:5432 |
+
+Au premier démarrage, l’API applique les migrations et crée un administrateur
+si aucun compte administrateur n’existe. Les valeurs peuvent être personnalisées
+dans `backend/.env` :
+
+```env
+ADMIN_MATRICULE=ADMIN001
+ADMIN_PASSWORD=changez-ce-mot-de-passe
+```
+
+Le secret TOTP initial est affiché une seule fois dans les logs :
+
+```bash
+docker compose logs api
+```
+
+Arrêter la stack sans supprimer les volumes :
+
+```bash
+docker compose down
+```
+
+## Développement et validation
+
+```bash
+cd backend && npm ci && npm run typecheck && npm test
+cd ../admin && npm ci && npm run build && npm run test:e2e
+cd ../web && npm ci && npm run build
+```
+
+## Technologies et licences
+
+| Composant | Technologie | Licence |
+|---|---|---|
+| API | Node.js, TypeScript, Fastify | MIT |
+| Données | PostgreSQL, Prisma | PostgreSQL License / Apache 2.0 |
+| Interface web | Vue 3, Vite, TypeScript | MIT |
+| Interface admin | Vue 3, Vite, Tailwind CSS | MIT |
+| Chiffrement E2E cible | OpenMLS, MLS/RFC 9420, WebAssembly | MIT / Apache-2.0 |
+| Conteneurs | Docker Compose, Nginx | Apache 2.0 / BSD-2-Clause |
+
+Les licences et notices des dépendances transitives doivent être vérifiées
+avant le dépôt final. La licence du prototype est disponible dans
+[`backend/LICENSE`](backend/LICENSE).
+
+## Documentation
+
+- [Fondations et méthode](docs/00_foundation_engineering_mindset.md)
+- [Exigences produit](docs/01_requirements_prd.md)
+- [Exigences système](docs/02_requirements_srs.md)
+- [Garanties et invariants](docs/03_design_contract_invariants.md)
+- [Décisions d’architecture](docs/06_architecture_decisions.md)
+- [Tests d’acceptation](docs/07_acceptance_tests.md)
+- [Contrat API](docs/08_interfaces_api.md)
+- [Modèle de données](docs/09_data_model.md)
+
+## Limites connues
+
+Le prototype ne doit pas être présenté comme une messagerie souveraine complète
+tant que le protocole de chiffrement de bout en bout éprouvé, les conversations,
+les groupes et les fichiers chiffrés ne sont pas intégrés et démontrés. Les
+données et comptes utilisés pour les tests sont fictifs.
