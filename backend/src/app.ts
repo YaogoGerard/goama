@@ -28,6 +28,7 @@ import { enregistrerRoutesMessaging } from "./messaging/routes.js";
 import { enregistrerPasserelleWs } from "./messaging/ws.js";
 import { enregistrerRoutesAgents } from "./agents/routes.js";
 import { enregistrerRoutesMedia } from "./media/routes.js";
+import { enregistrerRoutesDevices } from "./devices/routes.js";
 
 // ---- Gardes de sécurité ------------------------------------------------
 // requireAuth : trois vérifications, dans cet ordre —
@@ -47,6 +48,7 @@ function fabriquerRequireAuth(app: FastifyInstance): Garde {
     const agent = await prisma.agent.findUnique({ where: { id: payload.sub } }); // étape 2
     if (!agent) return reply.code(401).send({ erreur: "jeton_absent_ou_invalide" });
     if (agent.statut === "REVOQUE") return reply.code(401).send({ erreur: "agent_revoque" });
+    if (agent.statut === "SUSPENDU") return reply.code(401).send({ erreur: "compte_suspendu" });
 
     const session = await prisma.session.findUnique({ where: { id: payload.jti } }); // étape 3
     if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
@@ -129,6 +131,7 @@ export async function construireApp(): Promise<FastifyInstance> {
   enregistrerRoutesMessaging(app);
   enregistrerRoutesAgents(app);
   enregistrerRoutesMedia(app);
+  enregistrerRoutesDevices(app);
   enregistrerPasserelleWs(app);
 
   // Dossier des blobs chiffrés, créé s'il manque

@@ -28,7 +28,14 @@ enum Role {
 enum Statut {
   PRE_INSCRIT // pré-inscrit par l'Administrateur, pas encore activé
   ACTIF // activé (code + secret + TOTP), peut se connecter
+  SUSPENDU // accès temporairement désactivé par l'Administrateur
   REVOQUE // révoqué : plus AUCUN accès, sur tous les appareils (épreuve « Révocation »)
+}
+
+enum RetraitStatut {
+  EN_ATTENTE
+  TERMINE
+  ECHEC
 }
 
 enum RoleMembre {
@@ -56,10 +63,60 @@ model Agent {
   createdAt             DateTime  @default(now())
 
   sessions       Session[]
+  devices        Device[]
+  enrollmentAuthorizations EnrollmentAuthorization[]
   keyPackages    KeyPackage[]
   memberships    GroupMember[]
   messages       Message[]
   codeActivation CodeActivation? // code d'activation courant (un seul par agent)
+  retraits       RetraitCryptographique[]
+}
+
+enum DeviceStatut {
+  PENDING
+  ENROLED
+  REVOQUE
+}
+
+model Device {
+  id        String       @id @default(uuid())
+  agentId   String
+  label     String
+  publicKey String
+  statut    DeviceStatut @default(PENDING)
+  enrolledAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime     @default(now())
+  agent     Agent        @relation(fields: [agentId], references: [id])
+  sessions  Session[]
+
+  @@index([agentId])
+}
+
+model EnrollmentAuthorization {
+  id        String   @id @default(uuid())
+  agentId   String
+  codeHash  String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  agent     Agent    @relation(fields: [agentId], references: [id])
+
+  @@index([agentId])
+}
+
+model RetraitCryptographique {
+  id        String        @id @default(uuid())
+  groupeId  String
+  agentId   String
+  statut    RetraitStatut @default(EN_ATTENTE)
+  erreur    String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  agent     Agent         @relation(fields: [agentId], references: [id])
+
+  @@unique([groupeId, agentId])
+  @@index([statut])
 }
 
 // Code d'activation à usage unique, valable 24 h (ADR-15, REQ-ID-002).
@@ -77,7 +134,9 @@ model CodeActivation {
 model Session {
   id        String    @id @default(uuid()) // sert de « jti » dans le JWT
   agentId   String
+  deviceId  String?
   agent     Agent     @relation(fields: [agentId], references: [id])
+  device    Device?   @relation(fields: [deviceId], references: [id])
   createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime? // toute nouvelle connexion révoque les sessions précédentes

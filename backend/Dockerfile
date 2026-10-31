@@ -1,8 +1,13 @@
 # Image multi-étapes : le build compile TypeScript, l'image finale est légère.
 FROM node:22-alpine AS build
 WORKDIR /app
+ENV DATABASE_URL=postgresql://goama:goama@db:5432/goama
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 2 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm ci --ignore-scripts
 COPY . .
 RUN npx prisma generate && npm run build
 
@@ -16,4 +21,4 @@ COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY package.json ./
 EXPOSE 8080
 # Migrations au démarrage (REQ-OPS-001), puis l'API
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/bootstrap-admin.js && node dist/server.js"]

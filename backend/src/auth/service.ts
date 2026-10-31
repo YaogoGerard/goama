@@ -62,6 +62,27 @@ export async function preInscrire(
   return { agentId: agent.id, codeActivation: codeClair };
 }
 
+export async function reinitialiserAccesAgent(agentId: string, adminId: string) {
+  const agent = await prisma.agent.findUnique({ where: { id: agentId } });
+  if (!agent || agent.role !== "AGENT") throw new ErreurApi(404, "agent_introuvable");
+  const codeClair = codeActivationAleatoire();
+  await prisma.$transaction([
+    prisma.agent.update({
+      where: { id: agentId },
+      data: { statut: "PRE_INSCRIT", secretHash: null, totpSecret: null, revokedAt: null },
+    }),
+    prisma.session.updateMany({ where: { agentId, revokedAt: null }, data: { revokedAt: new Date() } }),
+    prisma.device.updateMany({ where: { agentId, statut: "ENROLED" }, data: { statut: "REVOQUE", revokedAt: new Date() } }),
+    prisma.codeActivation.upsert({
+      where: { agentId },
+      update: { codeHash: createHash("sha256").update(codeClair).digest("hex"), expiresAt: dansUnNombreHeures(config.ACTIVATION_TTL_H), usedAt: null },
+      create: { agentId, codeHash: createHash("sha256").update(codeClair).digest("hex"), expiresAt: dansUnNombreHeures(config.ACTIVATION_TTL_H) },
+    }),
+  ]);
+  await journaliser(adminId, "reinitialisation_acces", agent.matricule);
+  return { agentId, codeActivation: codeClair };
+}
+
 // 2) Activation : l'agent prouve qu'il détient le code, choisit son secret
 //    personnel et reçoit son secret TOTP (à scanner dans son application
 //    d'authentification). Après activation, le code devient inutilisable.
@@ -111,6 +132,7 @@ export async function connecter(
   // Scrypt factice si compte inexistant → durée de réponse homogène (anti-timing)
   if (!agent || !agent.secretHash) {
     scryptFactice(donnees.secret);
+    await journaliser(null, "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }
 
@@ -130,6 +152,7 @@ export async function connecter(
 
   // Échec d'authentification : mauvais statut, secret faux ou compte verrouillé
   if (agent.statut !== "ACTIF" || !secretOk || estVerrouille) {
+    await journaliser(agent.id, "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }
 
@@ -144,6 +167,7 @@ export async function connecter(
         verrouilleJusqua: nouvelles >= MAX_TENTATIVES ? new Date(maintenant + DUREE_VERROU_MS) : agent.verrouilleJusqua,
       },
     });
+    await journaliser(agent.id, nouvelles >= MAX_TENTATIVES ? "compte_verrouille" : "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }
 

@@ -50,6 +50,13 @@ export async function revoquerAgent(agentId: string, adminId: string) {
       where: { agentId, removedAt: null },
       data: { removedAt: new Date() },
     }),
+    ...groupes.map((g) =>
+      prisma.retraitCryptographique.upsert({
+        where: { groupeId_agentId: { groupeId: g.groupeId, agentId } },
+        update: { statut: "EN_ATTENTE", erreur: null },
+        create: { groupeId: g.groupeId, agentId, statut: "EN_ATTENTE" },
+      }),
+    ),
   ]);
 
   await journaliser(adminId, "revocation", agent.matricule);

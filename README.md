@@ -54,3 +54,24 @@ Chaîne de la méthode SWE-FOUNDATIONS-BEFORE-CODE : **Exigence → Garantie →
 ## Statut
 
 Cette documentation est une base de cadrage, pas une certification de sécurité. Rien n'y est présenté comme implémenté. Les diagrammes Mermaid n'ont pas été rendus automatiquement. Avant le dépôt, chaque affirmation de sécurité reprise dans les notes doit être vérifiée dans le code et par un test, et les licences (Redis, MinIO en particulier) relues.
+
+## Lancer la stack Docker
+
+Depuis la racine du projet :
+
+```bash
+openssl rand -hex 32 | sed 's/^/JWT_SECRET=/' > backend/.env
+docker compose up -d --build
+```
+
+L'interface web est disponible sur `http://localhost:3000` et l'interface admin sur
+`http://localhost:5173`. L'API répond sur `http://localhost:8080`; les requêtes `/api`
+des deux interfaces sont relayées vers l'API par Nginx.
+
+Les valeurs par défaut de PostgreSQL sont destinées au développement local. Définir
+`POSTGRES_USER`, `POSTGRES_PASSWORD` et `POSTGRES_DB` avant une utilisation en production.
+Le fichier `backend/.env` contient la clé JWT locale et ne doit pas être versionné.
+Au premier démarrage, l'API crée automatiquement un administrateur si aucun
+administrateur n'existe. Les valeurs peuvent être personnalisées dans
+`backend/.env` avec `ADMIN_MATRICULE` et `ADMIN_PASSWORD`. Le secret TOTP est
+affiché uniquement dans les logs du premier démarrage.

@@ -3,8 +3,18 @@ import type { FastifyInstance } from "fastify";
 import { revoquerAgent } from "./service.js";
 import { relais } from "../messaging/relay.js";
 import { prisma } from "../plugins/db.js";
+import { ErreurApi } from "../lib/erreurs.js";
+import { journaliser } from "../plugins/audit.js";
 
 export function enregistrerRoutesAgents(app: FastifyInstance) {
+  app.get("/account/me", { preHandler: [app.requireAuth] }, async (req) => {
+    const agent = await prisma.agent.findUniqueOrThrow({
+      where: { id: req.agent!.id },
+      select: { id: true, matricule: true, prenom: true, nom: true, role: true, statut: true },
+    });
+    return agent;
+  });
+
   // ---- Annuaire officiel (agents ACTIFS uniquement) ---------------------
   // Le matricule n'est volontairement PAS exposé : réservé à l'Administrateur.
   app.get("/agents", { preHandler: [app.requireAuth] }, async () => {
@@ -17,16 +27,138 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
 
   // ---- Révocation immédiate (Administrateur uniquement) ----------------
   // REQ-ABUSE-007 (P1) : 30 opérations d'administration / minute
+  const revoquer = async (req: any) => {
+    const { id } = req.params as { id: string };
+    return revoquerAgent(id, req.agent!.id);
+  };
+
   app.post(
     "/agents/:id/revoquer",
     {
       preHandler: [app.requireAuth, app.requireAdmin],
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     },
+    revoquer,
+  );
+  app.post(
+    "/admin/accounts/:id/revoke",
+    {
+      preHandler: [app.requireAuth, app.requireAdmin],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    revoquer,
+  );
+  app.post(
+    "/admin/accounts/:id/suspend",
+    {
+      preHandler: [app.requireAuth, app.requireAdmin],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
     async (req) => {
       const { id } = req.params as { id: string };
-      return revoquerAgent(id, req.agent!.id);
+      const agent = await prisma.agent.findUnique({ where: { id } });
+      if (!agent) throw new ErreurApi(404, "agent_introuvable");
+      if (agent.role === "ADMIN") throw new ErreurApi(400, "admin_non_suspendable");
+      await prisma.$transaction([
+        prisma.agent.update({ where: { id }, data: { statut: "SUSPENDU" } }),
+        prisma.session.updateMany({ where: { agentId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
+      ]);
+      await journaliser(req.agent!.id, "suspension", agent.matricule);
+      relais.fermerAgent(id, 4003);
+      return { ok: true };
     },
+  );
+
+  // ---- Vue complète des agents pour le tableau de bord Administrateur --
+  // Réservé à l'ADMIN (doc 08 §2 / REQ-REV-001 / REQ-OPS-013) :
+  // expose statut, matricule et historique de révocation.
+  app.get(
+    "/admin/agents",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => {
+      return prisma.agent.findMany({
+        select: {
+          id: true,
+          matricule: true,
+          prenom: true,
+          nom: true,
+          ministere: true,
+          fonction: true,
+          categorie: true,
+          role: true,
+          statut: true,
+          createdAt: true,
+          revokedAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      });
+    },
+  );
+  app.get(
+    "/admin/accounts",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => {
+      return prisma.agent.findMany({
+        select: {
+          id: true,
+          matricule: true,
+          prenom: true,
+          nom: true,
+          ministere: true,
+          fonction: true,
+          categorie: true,
+          role: true,
+          statut: true,
+          createdAt: true,
+          revokedAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      });
+    },
+  );
+
+  // ---- Statistiques globales pour le tableau de bord Admin -------------
+  app.get(
+    "/admin/stats",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => {
+      const [total, actifs, preInscrits, revoques, groupes] = await Promise.all([
+        prisma.agent.count({ where: { role: "AGENT" } }),
+        prisma.agent.count({ where: { role: "AGENT", statut: "ACTIF" } }),
+        prisma.agent.count({ where: { role: "AGENT", statut: "PRE_INSCRIT" } }),
+        prisma.agent.count({ where: { role: "AGENT", statut: "REVOQUE" } }),
+        prisma.group.count(),
+      ]);
+      return { total, actifs, preInscrits, revoques, groupes };
+    },
+  );
+
+  // ---- Journal d'audit (ADR-17 / REQ-AUD-001 / REQ-AUD-003) ------------
+  // Traces techniques uniquement, JAMAIS de contenu de message.
+  app.get(
+    "/admin/audit-logs",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => {
+      return prisma.auditLog.findMany({
+        take: 50,
+        orderBy: { createdAt: "desc" },
+      });
+    },
+  );
+  app.get(
+    "/admin/audit-events",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => prisma.auditLog.findMany({ take: 50, orderBy: { createdAt: "desc" } }),
+  );
+  app.get(
+    "/admin/retentions",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () =>
+      prisma.retraitCryptographique.findMany({
+        where: { statut: { not: "TERMINE" } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, groupeId: true, agentId: true, statut: true, erreur: true, createdAt: true, updatedAt: true },
+      }),
   );
 
   // ---- Présence : agents en ligne parmi MES groupes ---------------------

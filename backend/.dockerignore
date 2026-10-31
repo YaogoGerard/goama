@@ -1,6 +1,7 @@
 node_modules
 dist
 data
+.pgdata
 .env
 *.log
 DEMO_ACCOUNTS.md

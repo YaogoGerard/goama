@@ -14,7 +14,7 @@ export type AgentCourant = {
   id: string;
   role: RoleApp;
   matricule: string;
-  statut: "PRE_INSCRIT" | "ACTIF" | "REVOQUE";
+  statut: "PRE_INSCRIT" | "ACTIF" | "SUSPENDU" | "REVOQUE";
 };
 
 export type PayloadJeton = {
