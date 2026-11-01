@@ -75,11 +75,13 @@ class ApiClient {
   async logout() {
     try {
       if (this.token) {
+        // Corps vide interdit (Content-Type json exigé par ce client) :
+        // Fastify refuserait un POST sans corps (400 corps_invalide).
         await this.request<{ ok: boolean }>("/auth/logout", {
           method: "POST",
+          body: JSON.stringify({}),
         });
       }
-
     } finally {
       this.setToken(null);
     }
