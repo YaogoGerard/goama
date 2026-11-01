@@ -52,7 +52,9 @@ services:
   web:
     build:
       context: ./web
-      dockerfile: Dockerfile
+      # Dockerfile propagé hors de web/ (deploy/web.Dockerfile) :
+      # web/ reste intact, exactement tel que pullé du dépôt distant.
+      dockerfile: ../deploy/web.Dockerfile
     ports:
       - "${WEB_PORT:-3000}:80"
     depends_on:
