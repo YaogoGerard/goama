@@ -4,15 +4,17 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ENV_FILE="$ROOT_DIR/backend/.env"
 
-usage() {
-  echo "Usage: $0 <matricule> <mot-de-passe>" >&2
+if [ "$#" -gt 1 ]; then
+  echo "Usage: $0 [matricule]" >&2
   exit 2
-}
+fi
 
-[ "$#" -eq 2 ] || usage
-
-matricule=$1
-mot_de_passe=$2
+matricule=${1:-${ADMIN_MATRICULE:-ADMIN001}}
+printf 'Mot de passe administrateur (12 caractères minimum) : '
+stty -echo
+IFS= read -r mot_de_passe
+stty echo
+printf '\n'
 
 case "$matricule" in
   *[!A-Za-z0-9_-]*|"") echo "Matricule invalide." >&2; exit 2 ;;

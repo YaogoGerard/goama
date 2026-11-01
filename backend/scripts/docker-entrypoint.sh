@@ -2,7 +2,7 @@
 set -eu
 
 npx prisma migrate deploy
-/app/scripts/bootstrap-admin.sh
+node /app/dist/bootstrap-admin.js
 
 echo ""
 echo "Goama est disponible :"

@@ -10,7 +10,7 @@ import { totp } from "./totp.js";
 let secretTotp = "";
 
 test.beforeAll(() => {
-  // Le secret TOTP réel est généré par scripts/bootstrap-admin.ts au
+  // Le secret TOTP réel est généré par src/bootstrap-admin.ts au
   // démarrage du conteneur. On le lit à la source (la base), comme un
   // exploitant provisionnerait son administrateur.
   secretTotp = execSync(

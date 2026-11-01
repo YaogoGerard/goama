@@ -69,11 +69,12 @@ modifié par la refonte de l’administration.
 Depuis la racine, le lancement recommandé pour une démonstration locale est :
 
 ```bash
-./admin.sh ADMIN001 'un-mot-de-passe-local-solide'
-docker compose up -d --build
+./setup.sh
 ```
 
-`admin.sh` configure `backend/.env` et désactive le contournement TOTP par défaut.
+Le script demande le matricule et le mot de passe sans l'afficher, configure
+`backend/.env`, puis construit et démarre toute la stack. Le mot de passe n'est
+pas passé en argument de commande.
 Pour une démonstration rapide sans saisir de code TOTP, activez explicitement le
 mode démo avant de lancer Compose :
 
@@ -108,7 +109,7 @@ Adresses locales :
 | PostgreSQL | localhost:5432 |
 
 Au premier démarrage, l’entrypoint `backend/scripts/docker-entrypoint.sh`
-applique les migrations puis appelle `backend/scripts/bootstrap-admin.sh`.
+applique les migrations puis exécute directement le bootstrap compilé.
 Ce bootstrap est idempotent : il crée un administrateur uniquement si aucun
 administrateur n’existe. Les valeurs sont obligatoires et se configurent dans
 `backend/.env` :

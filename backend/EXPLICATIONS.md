@@ -96,7 +96,7 @@ peut donc lire ni les messages, ni les fichiers, ni même le nom des groupes. »
 | `prisma/schema.prisma` | Schéma de données | **aucune colonne de contenu en clair ni de nom de groupe** |
 | `prisma.config.ts` | Config Prisma 7 (migrations) | URL depuis l'environnement |
 | `seed/seed.ts` | Comptes fictifs de démonstration | 100 % fictif, exigé par le règlement §4 |
-| `scripts/bootstrap-admin.ts` | Amorçage du 1er admin | **refusé si un admin existe** (ADR-14, T-070) |
+| `src/bootstrap-admin.ts` | Amorçage du 1er admin | **refusé si un admin existe** (ADR-14, T-070) |
 | `tests/*.test.ts` | 3 épreuves du jury en tests réels | bonus +2 du règlement |
 
 ---

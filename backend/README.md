@@ -54,8 +54,8 @@ docker compose exec api npm run db:seed   # comptes de démonstration fictifs
 # (les migrations s'appliquent automatiquement au démarrage)
 ```
 
-Développement local : `npm install`, copier `.env.example` en `.env`, puis
-`npx prisma migrate deploy && npm run db:seed && npm run dev` (API sur `:8080`).
+Développement local sans Docker : `npm install`, copier `.env.example` en `.env`,
+puis `npm run db:deploy && npm run bootstrap:admin && npm run dev`.
 
 Vérifications : `curl localhost:8080/healthz` · `npm run demo` (flux complet) ·
 `npm test` (12 tests de sécurité : DB sans clair, révocation, intrus — bonus §5).
