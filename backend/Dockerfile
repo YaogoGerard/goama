@@ -18,7 +18,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
+COPY scripts/docker-entrypoint.sh scripts/bootstrap-admin.sh ./scripts/
 COPY package.json ./
+RUN chmod 755 ./scripts/docker-entrypoint.sh ./scripts/bootstrap-admin.sh
 EXPOSE 8080
-# Migrations au démarrage (REQ-OPS-001), puis l'API
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/bootstrap-admin.js && node dist/server.js"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+CMD ["node", "dist/server.js"]

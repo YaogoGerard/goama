@@ -8,6 +8,8 @@ import type {
   Retention,
 } from "../types.js";
 
+const ADMIN_PAGE_SIZE = 10;
+
 // Préfixe de l'API (direct ou via le proxy Vite /api)
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -91,20 +93,41 @@ class ApiClient {
     return this.request<AdminIdentity>("/account/me");
   }
 
-  async getAgents(): Promise<Agent[]> {
-    return this.request<Agent[]>("/admin/accounts");
+  async getAgents(): Promise<Agent[] & Partial<import("../types.js").Page<Agent>>> {
+    const page = await this.getAgentsPage();
+    return Object.assign(page.items, { page: page.page, totalPages: page.totalPages, total: page.total, limit: page.limit });
+  }
+
+  async getAgentsPage(page = 1, limit = ADMIN_PAGE_SIZE, search = "", status = "ALL") {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search.trim()) params.set("search", search.trim());
+    if (status !== "ALL") params.set("status", status);
+    return this.request<import("../types.js").Page<Agent>>(`/admin/accounts?${params}`);
   }
 
   async getStats(): Promise<Stats> {
     return this.request<Stats>("/admin/stats");
   }
 
-  async getAuditLogs(): Promise<AuditLog[]> {
-    return this.request<AuditLog[]>("/admin/audit-events");
+  async getReferenceData(): Promise<import("../types.js").ReferenceData> {
+    return this.request<import("../types.js").ReferenceData>("/admin/reference-data");
+  }
+
+  async getAuditLogs(): Promise<AuditLog[] & Partial<import("../types.js").Page<AuditLog>>> {
+    const page = await this.getAuditLogsPage();
+    return Object.assign(page.items, { page: page.page, totalPages: page.totalPages, total: page.total, limit: page.limit });
+  }
+
+  async getAuditLogsPage(page = 1, limit = ADMIN_PAGE_SIZE) {
+    return this.request<import("../types.js").Page<AuditLog>>(`/admin/audit-events?page=${page}&limit=${limit}`);
   }
 
   async getRetentions(): Promise<Retention[]> {
-    return this.request<Retention[]>("/admin/retentions");
+    return (await this.getRetentionsPage()).items;
+  }
+
+  async getRetentionsPage(page = 1, limit = ADMIN_PAGE_SIZE) {
+    return this.request<import("../types.js").Page<Retention>>(`/admin/retentions?page=${page}&limit=${limit}`);
   }
 
   async preInscrire(data: PreInscriptionData): Promise<PreInscriptionResult> {
@@ -117,12 +140,21 @@ class ApiClient {
   async revoquerAgent(agentId: string): Promise<{ ok: boolean }> {
     return this.request<{ ok: boolean }>(`/admin/accounts/${agentId}/revoke`, {
       method: "POST",
+      body: JSON.stringify({}),
     });
   }
 
   async suspendreAgent(agentId: string): Promise<{ ok: boolean }> {
     return this.request<{ ok: boolean }>(`/admin/accounts/${agentId}/suspend`, {
       method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  async reactiverAgent(agentId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/admin/accounts/${agentId}/reactivate`, {
+      method: "POST",
+      body: JSON.stringify({}),
     });
   }
 

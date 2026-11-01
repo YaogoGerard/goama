@@ -23,9 +23,13 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-goama}:${POSTGRES_PASSWORD:-goama}@db:5432/${POSTGRES_DB:-goama}
+      NODE_ENV: ${NODE_ENV:-development}
       FILES_DIR: /data/files
       PORT: 8080
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5173}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     ports:
       - "${API_PORT:-8080}:8080"
     volumes:

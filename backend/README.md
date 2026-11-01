@@ -50,7 +50,7 @@ Client Vue 3 + OpenMLS (WASM)  ←→  API Fastify (ce dépôt)  ←→  Postgre
 
 ```bash
 docker compose up -d          # PostgreSQL + API : hébergement souverain, sans service tiers
-docker compose exec api npm run db:seed   # comptes de DÉMONSTRATION fictifs → DEMO_ACCOUNTS.md
+docker compose exec api npm run db:seed   # comptes de démonstration fictifs
 # (les migrations s'appliquent automatiquement au démarrage)
 ```
 

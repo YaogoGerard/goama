@@ -93,7 +93,7 @@
 
   /* ---- Barre latérale -------------------------------------------------- */
   .sidebar {
-    @apply flex flex-col border-r px-3 py-5;
+    @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r px-3 py-5;
     background: var(--bg2);
     border-color: var(--line);
   }
@@ -106,6 +106,10 @@
     @apply grid h-8 w-8 place-items-center rounded-lg border text-[13px] font-semibold;
     border-color: var(--line);
     color: var(--text);
+  }
+
+  .brand-logo {
+    @apply h-9 w-9 shrink-0 object-contain;
   }
 
   .brand strong,
@@ -210,6 +214,10 @@
     @apply ml-auto flex items-center gap-2;
   }
 
+  .top-actions .primary {
+    white-space: nowrap;
+  }
+
   .main {
     @apply mx-auto max-w-[1240px] p-8;
   }
@@ -256,7 +264,7 @@
 
   /* ---- Statistiques / panneaux -------------------------------------------- */
   .stats-grid {
-    @apply grid grid-cols-4 gap-3;
+    @apply grid grid-cols-3 gap-3;
   }
 
   .stat,
@@ -267,7 +275,25 @@
   }
 
   .stat {
-    @apply p-[18px];
+    @apply relative overflow-hidden p-[18px];
+  }
+
+  .stat::after {
+    @apply absolute bottom-0 left-0 h-1 w-full;
+    content: "";
+    background: var(--line);
+  }
+
+  .stat-success::after {
+    background: var(--success);
+  }
+
+  .stat-warning::after {
+    background: var(--warn);
+  }
+
+  .stat-danger::after {
+    background: var(--danger);
   }
 
   .stat-label {
@@ -443,6 +469,12 @@
     color: var(--bg2);
   }
 
+  .pagination {
+    @apply flex items-center justify-between gap-3 border-t px-4 py-3 text-xs;
+    border-color: var(--line);
+    color: var(--muted);
+  }
+
   .login-alert {
     @apply flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-[13px];
   }
@@ -505,6 +537,14 @@
     @apply h-14 px-4;
   }
 
+  .topbar .crumb {
+    @apply min-w-0 truncate;
+  }
+
+  .top-actions .primary {
+    @apply px-3 text-xs;
+  }
+
   .main {
     @apply px-4 py-6;
   }
@@ -519,6 +559,10 @@
 
   .stats-grid {
     @apply gap-2;
+  }
+
+  .stats-grid {
+    @apply grid-cols-1;
   }
 
   .stat {

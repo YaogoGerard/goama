@@ -70,3 +70,17 @@ export interface Retention {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ReferenceData {
+  categories: string[];
+  ministeres: string[];
+  postes: Array<{ value: string; label: string; parrainage: boolean }>;
+}

@@ -30,7 +30,7 @@
 npm install                  # dépendances
 docker compose up -d         # PostgreSQL + API compilée, UNE commande (exigence §3)
 docker compose exec api npx prisma migrate deploy   # (fait automatiquement au boot)
-docker compose exec api npm run db:seed             # comptes fictifs → DEMO_ACCOUNTS.md
+docker compose exec api npm run db:seed             # comptes fictifs
 docker compose exec api npm run bootstrap:admin     # OU le seed : l'un des deux seulement
 npm run dev                  # (développement local) API sur http://localhost:8080
 npm run demo                 # déroule le flux complet contre l'API (démo vidéo)
@@ -95,7 +95,7 @@ peut donc lire ni les messages, ni les fichiers, ni même le nom des groupes. »
 | `src/jobs/purge.ts` | Purge contenus 30 j, audit 90 j | comptes jamais supprimés (REQ-OPS-13) |
 | `prisma/schema.prisma` | Schéma de données | **aucune colonne de contenu en clair ni de nom de groupe** |
 | `prisma.config.ts` | Config Prisma 7 (migrations) | URL depuis l'environnement |
-| `seed/seed.ts` | Comptes fictifs → `DEMO_ACCOUNTS.md` | 100 % fictif, exigé par le règlement §4 |
+| `seed/seed.ts` | Comptes fictifs de démonstration | 100 % fictif, exigé par le règlement §4 |
 | `scripts/bootstrap-admin.ts` | Amorçage du 1er admin | **refusé si un admin existe** (ADR-14, T-070) |
 | `tests/*.test.ts` | 3 épreuves du jury en tests réels | bonus +2 du règlement |
 

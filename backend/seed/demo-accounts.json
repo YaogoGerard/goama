@@ -1,0 +1,85 @@
+{
+  "comptes": [
+    {
+      "matricule": "ADMIN001",
+      "prenom": "Amélie",
+      "nom": "KABORÉ",
+      "ministere": "Transition digitale (fictif)",
+      "fonction": "Administratrice messagerie",
+      "categorie": "P",
+      "role": "ADMIN",
+      "motDePasse": "AdminGoama2026!",
+      "totp": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+    },
+    {
+      "matricule": "AG001",
+      "prenom": "Awa",
+      "nom": "SAWADOGO",
+      "ministere": "Santé (fictif)",
+      "fonction": "Médecin-conseil",
+      "categorie": "A",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "KRSXG5DSM5UQ4LLNKRSXG5DSM5UQ4LLN"
+    },
+    {
+      "matricule": "AG002",
+      "prenom": "Issa",
+      "nom": "OUÉDRAOGO",
+      "ministere": "Administration territoriale (fictif)",
+      "fonction": "Chargé d'études",
+      "categorie": "B",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "MFRGGZDFMZTWQ2LKMFRGGZDFMZTWQ2LK"
+    },
+    {
+      "matricule": "AG003",
+      "prenom": "Fatimata",
+      "nom": "KABORÉ",
+      "ministere": "Éducation nationale (fictif)",
+      "fonction": "Secrétaire générale adjointe",
+      "categorie": "B",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "NBSWY3DPFQQFO33SNBSWY3DPFQQFO33S"
+    },
+    {
+      "matricule": "AG004",
+      "prenom": "Moussa",
+      "nom": "TRAORÉ",
+      "ministere": "Santé (fictif)",
+      "fonction": "Directeur des ressources",
+      "categorie": "A",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "ONSWG4TFOQQGS4ZAONSWG4TFOQQGS4ZA"
+    },
+    {
+      "matricule": "AG005",
+      "prenom": "Mariam",
+      "nom": "ZONGO",
+      "ministere": "Transition digitale (fictif)",
+      "fonction": "Chargée de projet",
+      "categorie": "C",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "PBJXG4TBNVZGS5DPPBJXG4TBNVZGS5DP"
+    },
+    {
+      "matricule": "AG006",
+      "prenom": "Karim",
+      "nom": "COMPAORÉ",
+      "ministere": "Éducation nationale (fictif)",
+      "fonction": "Inspecteur",
+      "categorie": "C",
+      "role": "AGENT",
+      "motDePasse": "GoamaDemo2026!",
+      "totp": "QVSWY3DPEBZWQ3DFQVSWY3DPEBZWQ3DF"
+    }
+  ],
+  "groupe": {
+    "createur": "ADMIN001",
+    "membres": ["AG001", "AG002"]
+  }
+}

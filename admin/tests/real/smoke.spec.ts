@@ -36,7 +36,7 @@ async function seConnecter(page: Page) {
   // En cas de bascule de période TOTP (fenêtre de 30 s), un second essai
   // avec le code courant recalculé suffit.
   try {
-    await page.getByText("Tableau de bord", { exact: false }).first().waitFor({ timeout: 5_000 });
+    await page.getByText("Vue d’ensemble", { exact: false }).first().waitFor({ timeout: 5_000 });
   } catch {
     await page.getByLabel(/Code TOTP/i).fill(totp(secretTotp));
     await page.getByRole("button", { name: /continuer/i }).click();
@@ -46,7 +46,7 @@ async function seConnecter(page: Page) {
 test.describe("Parcours réel Admin Goama (stack Docker)", () => {
   test("1. L'écran de connexion 2FA est servi par l'admin conteneurisé", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText(/Goama Admin|Administration/i).first()).toBeVisible();
+    await expect(page.getByText(/Goama|Administration/i).first()).toBeVisible();
     await expect(page.getByLabel(/Code TOTP/i)).toBeVisible();
     // Favicon réel bien servi
     const res = await page.request.get("/favicon.ico");
@@ -59,15 +59,12 @@ test.describe("Parcours réel Admin Goama (stack Docker)", () => {
     // Le dashboard affiche les statistiques servies par l'API réelle
     await expect(page.getByText(/Agents actifs/i)).toBeVisible();
     await expect(page.getByText(/Pré-inscriptions en attente/i)).toBeVisible();
-    // Le panneau de confidentialité (G-06 & REQ-AUTHZ-003) est présent
-    await expect(page.getByText(/Confidentialité préservée/i)).toBeVisible();
   });
 
   test("3. Gestion des agents : la table nourrie par le backend réagit à la recherche", async ({ page }) => {
     await seConnecter(page);
 
-    await page.getByRole("button", { name: /Gestion des agents/i }).click();
-    await expect(page.getByText(/Agent & Matricule/i)).toBeVisible();
+    await expect(page.getByText(/^Agent$/i)).toBeVisible();
 
     // La recherche filtre côté client — « xxxzzz » ne doit rien trouver
     await page.getByPlaceholder(/Rechercher/i).fill("xxxzzz");
@@ -78,7 +75,7 @@ test.describe("Parcours réel Admin Goama (stack Docker)", () => {
   test("4. Journal d'audit : la connexion 2FA réelle a bien été journalisée", async ({ page }) => {
     await seConnecter(page);
 
-    await page.getByRole("button", { name: /Journal d'audit/i }).click();
+    await page.getByRole("button", { name: /Activité/i }).click();
     // La connexion de CE test apparaît dans le journal persisté par le backend
     await expect(page.getByText("Ouverture de session (2FA)").first()).toBeVisible();
   });

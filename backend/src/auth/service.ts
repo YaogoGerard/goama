@@ -149,6 +149,11 @@ export async function connecter(
   const totpOk = agent.totpSecret
     ? verifierCodeTotp(agent.totpSecret, agent.matricule, donnees.codeTotp)
     : false;
+  const demoTotpBypass =
+    config.DEMO_AUTH_BYPASS_TOTP &&
+    config.NODE_ENV !== "production" &&
+    agent.role === "ADMIN" &&
+    agent.matricule === config.DEMO_ADMIN_MATRICULE;
 
   // Échec d'authentification : mauvais statut, secret faux ou compte verrouillé
   if (agent.statut !== "ACTIF" || !secretOk || estVerrouille) {
@@ -157,7 +162,7 @@ export async function connecter(
   }
 
   // Second facteur incorrect : incrémenter le compteur (REQ-ID-005)
-  if (!totpOk) {
+  if (!totpOk && !demoTotpBypass) {
     const nouvelles = agent.tentativesConnexion + 1;
     await prisma.agent.update({
       where: { id: agent.id },
@@ -167,6 +172,10 @@ export async function connecter(
         verrouilleJusqua: nouvelles >= MAX_TENTATIVES ? new Date(maintenant + DUREE_VERROU_MS) : agent.verrouilleJusqua,
       },
     });
+
+    if (demoTotpBypass) {
+      await journaliser(agent.id, "connexion_demo_sans_totp");
+    }
     await journaliser(agent.id, nouvelles >= MAX_TENTATIVES ? "compte_verrouille" : "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }

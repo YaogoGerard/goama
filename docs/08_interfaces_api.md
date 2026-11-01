@@ -36,11 +36,18 @@
 | **Objets crypto** | `POST /conversations/{id}/objects` (publication binaire MLS ; classification incluse dans le payload chiffré), `GET /conversations/{id}/objects` (paginé par séquence), `POST /objects/{id}/ack` (accusé technique de récupération) | REQ-MSG-001 à 005 · REQ-CLS-001 |
 | **Médias** | `POST /media` (méta), `PUT /media/{id}/blob` (binaire chiffré), `GET /media/{id}/blob`, `GET /conversations/{id}/media` | REQ-FILE-001 à 004 |
 | **Présence** | `POST /presence` (signal ; écrit dans Redis seulement), `GET /conversations/{id}/presence` | REQ-DIR-002 à 005 |
-| **Administration** (routes sous `/admin`) | `GET /admin/accounts` (y compris révoqués), `POST /admin/accounts` (pré-inscription puis envoi du code), `POST /admin/accounts/{id}/revoke` (révocation), `POST /admin/accounts/{id}/suspend`, `DELETE /admin/devices/{id}` (révocation d'appareil), `GET /admin/retentions` (états de retrait en attente), `GET /admin/audit-events` | REQ-REV-001 à 008 · REQ-OPS-013 · REQ-AUD-001 à 004 |
+| **Administration** (routes sous `/admin`) | `GET /admin/reference-data` (catégories, ministères et postes officiels), `GET /admin/accounts?page=1&limit=25` (réponse paginée `{items, page, limit, total, totalPages}`, y compris révoqués), `POST /admin/accounts` (pré-inscription puis envoi du code), `POST /admin/accounts/{id}/revoke` (révocation définitive), `POST /admin/accounts/{id}/suspend` (suspension temporaire), `POST /admin/accounts/{id}/reactivate` (réactivation d'un compte suspendu), `DELETE /admin/devices/{id}` (révocation d'appareil), `GET /admin/retentions?page=1&limit=25` et `GET /admin/audit-events?page=1&limit=25` (même enveloppe paginée) | REQ-REV-001 à 008 · REQ-OPS-013 · REQ-AUD-001 à 004 |
 
 **Routes absentes à dessein** : toute suppression de compte (REQ-OPS-013), toute action d'administration sur les groupes (REQ-GRP-005), toute lecture d'administration du contenu (G-06), tout libre-service de régénération du second facteur (REQ-ID-009).
 
 ### 2.1 Règles de sécurité applicatives
+
+Les listes d'administration sont paginées côté serveur. `page` commence à 1,
+le front demande 10 éléments par page (`limit=10`) et le serveur plafonne toute
+demande à 100. Chaque réponse contient
+`items`, `page`, `limit`, `total` et `totalPages`; le client doit utiliser
+`totalPages` pour afficher la navigation et ne doit pas supposer que la
+première réponse contient toute la liste.
 
 - Chaque route DOIT vérifier : session valide (REQ-ID-007), appareil enrôlé, autorisation métier — en un point de contrôle unique (REQ-AUTHZ-001, G-01).
 - Toute route protégée DOIT refuser une session dont le MFA n'a pas été validé.

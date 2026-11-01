@@ -4,6 +4,5 @@ data
 .pgdata
 .env
 *.log
-DEMO_ACCOUNTS.md
 tests
 .git

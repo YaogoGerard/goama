@@ -19,12 +19,17 @@ describe("E2E Admin Workflow — Goama Administration", () => {
       statut: "ACTIF",
     });
     vi.spyOn(api, "getRetentions").mockResolvedValue([]);
+    vi.spyOn(api, "getReferenceData").mockResolvedValue({
+      categories: ["P", "A", "B", "C", "D", "E", "HORS_CATEGORIE"],
+      ministeres: ["Ministère de la Transition digitale"],
+      postes: [{ value: "Chef de Service", label: "Chef de Service", parrainage: true }],
+    });
   });
 
   it("1. Affiche l'écran de connexion 2FA si non authentifié", () => {
     const wrapper = mount(App);
     expect(wrapper.findComponent(LoginView).exists()).toBe(true);
-    expect(wrapper.text()).toContain("Goama Admin");
+    expect(wrapper.text()).toContain("Goama");
     expect(wrapper.text()).not.toContain("Connexion Administrateur");
     expect(wrapper.text()).toContain("Code TOTP");
     expect(wrapper.find(".shell").exists()).toBe(false);
@@ -61,6 +66,19 @@ describe("E2E Admin Workflow — Goama Administration", () => {
         createdAt: new Date().toISOString(),
         revokedAt: null,
       },
+      {
+        id: "ag-2",
+        matricule: "AG002",
+        nom: "TRAORÉ",
+        prenom: "Issa",
+        ministere: "Ministère de la Santé",
+        fonction: "Agent technique",
+        categorie: "B",
+        role: "AGENT",
+        statut: "REVOQUE",
+        createdAt: new Date().toISOString(),
+        revokedAt: new Date().toISOString(),
+      },
     ]);
     vi.spyOn(api, "getAuditLogs").mockResolvedValue([]);
 
@@ -73,11 +91,10 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     await flushPromises();
 
     expect(wrapper.find(".shell").exists()).toBe(true);
-    expect(wrapper.text()).toContain("Tableau de bord");
+    expect(wrapper.text()).toContain("Vue d’ensemble");
     expect(wrapper.text()).toContain("Agents actifs");
     expect(wrapper.text()).toContain("ADMIN001");
-    // Règle G-06 : l'avertissement de confidentialité doit être présent
-    expect(wrapper.text()).toContain("Confidentialité préservée");
+    expect(wrapper.text()).toContain("TRAORÉ");
   });
 
   it("4. Modal de pré-inscription : émet le code 24 h à usage unique (REQ-ID-002)", async () => {
@@ -107,7 +124,6 @@ describe("E2E Admin Workflow — Goama Administration", () => {
   it("5. Révocation immédiate d'un agent avec coupure d'accès (ADR-08 / REQ-REV-001)", async () => {
     api.setToken("fake-jwt-admin");
     const revoquerSpy = vi.spyOn(api, "revoquerAgent").mockResolvedValue({ ok: true });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     vi.spyOn(api, "getStats").mockResolvedValue({ total: 1, actifs: 1, preInscrits: 0, revoques: 0, groupes: 0 });
     vi.spyOn(api, "getAgents").mockResolvedValue([
@@ -135,6 +151,7 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     expect(revokeBtn.exists()).toBe(true);
 
     await revokeBtn.trigger("click");
+    await wrapper.find(".action-modal .primary").trigger("click");
     await flushPromises();
 
     expect(revoquerSpy).toHaveBeenCalledWith("target-agent-id");

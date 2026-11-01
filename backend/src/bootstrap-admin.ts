@@ -2,8 +2,12 @@ import { prisma } from "./plugins/db.js";
 import { hasherSecret } from "./lib/crypto.js";
 import { genererSecretTotp, uriTotp } from "./lib/totp.js";
 
-const matricule = process.env.ADMIN_MATRICULE ?? "ADMIN001";
-const motDePasse = process.env.ADMIN_PASSWORD ?? "AdminGoama2026!";
+const matricule = process.env.ADMIN_MATRICULE;
+const motDePasse = process.env.ADMIN_PASSWORD;
+
+if (!matricule || !motDePasse) {
+  throw new Error("ADMIN_MATRICULE et ADMIN_PASSWORD sont obligatoires pour créer l'administrateur.");
+}
 
 const existant = await prisma.agent.findFirst({
   where: { role: "ADMIN" },

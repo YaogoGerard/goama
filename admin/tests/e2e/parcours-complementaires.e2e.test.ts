@@ -108,17 +108,24 @@ describe("Parcours complémentaires de l'interface Admin — Goama", () => {
       role: "ADMIN",
       statut: "ACTIF",
     });
+    vi.spyOn(api, "getReferenceData").mockResolvedValue({
+      categories: ["P", "A", "B", "C", "D", "E", "HORS_CATEGORIE"],
+      ministeres: ["Ministère de la Transition digitale"],
+      postes: [
+        { value: "Chef de Service", label: "Chef de Service", parrainage: true },
+        { value: "Conseiller Technique", label: "Conseiller Technique", parrainage: false },
+      ],
+    });
   });
 
   it("7. Suspendre un agent actif : confirmation, appel API et rechargement", async () => {
     const suspendreSpy = vi.spyOn(api, "suspendreAgent").mockResolvedValue({ ok: true });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     const wrapper = mount(AgentTable, { props: { agents: [AGENTS[0]], loading: false } });
     const suspendBtn = wrapper.findAll("button").find((b) => b.text() === "Suspendre")!;
     expect(suspendBtn.exists()).toBe(true);
 
     await suspendBtn.trigger("click");
+    await wrapper.find(".action-modal .primary").trigger("click");
     await flushPromises();
 
     expect(suspendreSpy).toHaveBeenCalledWith("ag-1");
@@ -127,19 +134,35 @@ describe("Parcours complémentaires de l'interface Admin — Goama", () => {
     expect(wrapper.find(".login-alert").exists()).toBe(false);
   });
 
-  it("8. La suspension annulée (boîte de confirmation refusée) n'appelle pas l'API", async () => {
+  it("8. La suspension annulée dans la fenêtre de confirmation n'appelle pas l'API", async () => {
     const suspendreSpy = vi.spyOn(api, "suspendreAgent").mockResolvedValue({ ok: true });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
 
     const wrapper = mount(AgentTable, { props: { agents: [AGENTS[0]], loading: false } });
     await wrapper.findAll("button").find((b) => b.text() === "Suspendre")!.trigger("click");
+    expect(wrapper.find(".action-modal").exists()).toBe(true);
+    await wrapper.find(".action-modal .row-action").trigger("click");
     await flushPromises();
 
     expect(suspendreSpy).not.toHaveBeenCalled();
     expect(wrapper.emitted("refresh")).toBeUndefined();
   });
 
-  it("9. Recherche de filtre de statut : le tableau ne montre que les agents correspondants", async () => {
+  it("9. Réactiver un agent suspendu : confirmation, appel API et rechargement", async () => {
+    const reactiverSpy = vi.spyOn(api, "reactiverAgent").mockResolvedValue({ ok: true });
+    const wrapper = mount(AgentTable, { props: { agents: [AGENTS[1]], loading: false } });
+    const reactivateBtn = wrapper.findAll("button").find((b) => b.text() === "Réactiver")!;
+    expect(reactivateBtn.exists()).toBe(true);
+
+    await reactivateBtn.trigger("click");
+    expect(wrapper.find(".action-modal").text()).toContain("Réactiver cet agent ?");
+    await wrapper.find(".action-modal .primary").trigger("click");
+    await flushPromises();
+
+    expect(reactiverSpy).toHaveBeenCalledWith("ag-3");
+    expect(wrapper.emitted("refresh")).toHaveLength(1);
+  });
+
+  it("10. Recherche de filtre de statut : le tableau ne montre que les agents correspondants", async () => {
     const wrapper = mount(AgentTable, { props: { agents: AGENTS, loading: false } });
 
     // Aucun filtre : les 3 agents sont visibles
@@ -178,27 +201,23 @@ describe("Parcours complémentaires de l'interface Admin — Goama", () => {
     expect(wrapper.emitted("refresh")).toHaveLength(1);
   });
 
-  it("11. Navigation par onglets : agents, audit, retour au tableau de bord", async () => {
+  it("11. Navigation par onglets : audit et retour au tableau de bord", async () => {
     const wrapper = await connectedApp(() => stubDashboard(AGENTS, LOGS, RETENTIONS));
 
-    // Onglet Gestion des agents
     const navBtns = wrapper.findAll(".nav button");
-    await navBtns.find((b) => b.text().includes("Gestion des agents"))!.trigger("click");
-    await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("Gestion des agents");
-    // Compteur dans la barre latérale : les 3 agents
-    expect(wrapper.find(".count").text()).toBe("3");
+    expect(navBtns.some((b) => b.text().includes("Agents"))).toBe(false);
+    expect(wrapper.findComponent(AgentTable).exists()).toBe(true);
     // L'agent révoqué montre bien « Accès coupé » sans bouton action
     expect(wrapper.text()).toContain("Accès coupé");
 
-    // Onglet Journal d'audit
-    await navBtns.find((b) => b.text().includes("Journal d'audit"))!.trigger("click");
+    // Onglet Activité
+    await navBtns.find((b) => b.text().includes("Activité"))!.trigger("click");
     await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("Journal d'activité");
+    expect(wrapper.text()).toContain("Activité");
     expect(wrapper.text()).toContain("Révocation immédiate d'agent");
 
     // Retour au tableau de bord
-    await navBtns.find((b) => b.text().includes("Tableau de bord"))!.trigger("click");
+    await navBtns.find((b) => b.text().includes("Vue d’ensemble"))!.trigger("click");
     await wrapper.vm.$nextTick();
     // Le panneau Retraits à suivre apparaît (1 en attente)
     expect(wrapper.text()).toContain("Retraits à suivre");
@@ -276,6 +295,7 @@ describe("Parcours complémentaires de l'interface Admin — Goama", () => {
     });
 
     const wrapper = mount(PreInscrireModal);
+    await flushPromises();
 
     // La modale liste les postes habilités ET non habilités (ADR-12)
     const options = wrapper.findAll("select option").map((o) => o.text());

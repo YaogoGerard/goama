@@ -5,8 +5,21 @@ import { relais } from "../messaging/relay.js";
 import { prisma } from "../plugins/db.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { journaliser } from "../plugins/audit.js";
+import { CATEGORIES, MINISTERES, POSTES_REFERENCE } from "../reference-data.js";
+
+function pagination(req: { query?: unknown }) {
+  const query = (req.query ?? {}) as { page?: string; limit?: string; search?: string; status?: string };
+  const page = Math.max(Number.parseInt(query.page ?? "1", 10) || 1, 1);
+  const limit = Math.min(Math.max(Number.parseInt(query.limit ?? "25", 10) || 25, 1), 100);
+  return { page, limit, skip: (page - 1) * limit, query };
+}
 
 export function enregistrerRoutesAgents(app: FastifyInstance) {
+  app.get(
+    "/admin/reference-data",
+    { preHandler: [app.requireAuth, app.requireAdmin] },
+    async () => ({ categories: CATEGORIES, ministeres: MINISTERES, postes: POSTES_REFERENCE }),
+  );
   app.get("/account/me", { preHandler: [app.requireAuth] }, async (req) => {
     const agent = await prisma.agent.findUniqueOrThrow({
       where: { id: req.agent!.id },
@@ -68,6 +81,28 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
       return { ok: true };
     },
   );
+  app.post(
+    "/admin/accounts/:id/reactivate",
+    {
+      preHandler: [app.requireAuth, app.requireAdmin],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const agent = await prisma.agent.findUnique({ where: { id } });
+      if (!agent) throw new ErreurApi(404, "agent_introuvable");
+      if (agent.role === "ADMIN") throw new ErreurApi(400, "admin_non_reactivable");
+      if (agent.statut === "REVOQUE") throw new ErreurApi(400, "agent_revoque");
+      if (agent.statut !== "SUSPENDU") throw new ErreurApi(400, "agent_non_suspendu");
+
+      await prisma.agent.update({
+        where: { id },
+        data: { statut: "ACTIF" },
+      });
+      await journaliser(req.agent!.id, "reactivation", agent.matricule);
+      return { ok: true };
+    },
+  );
 
   // ---- Vue complète des agents pour le tableau de bord Administrateur --
   // Réservé à l'ADMIN (doc 08 §2 / REQ-REV-001 / REQ-OPS-013) :
@@ -97,23 +132,50 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
   app.get(
     "/admin/accounts",
     { preHandler: [app.requireAuth, app.requireAdmin] },
-    async () => {
-      return prisma.agent.findMany({
-        select: {
-          id: true,
-          matricule: true,
-          prenom: true,
-          nom: true,
-          ministere: true,
-          fonction: true,
-          categorie: true,
-          role: true,
-          statut: true,
-          createdAt: true,
-          revokedAt: true,
-        },
-        orderBy: [{ createdAt: "desc" }],
-      });
+    async (req) => {
+      const { page, limit, skip, query } = pagination(req);
+      const search = query.search?.trim();
+      const status = query.status && ["PRE_INSCRIT", "ACTIF", "SUSPENDU", "REVOQUE"].includes(query.status)
+        ? query.status as "PRE_INSCRIT" | "ACTIF" | "SUSPENDU" | "REVOQUE"
+        : undefined;
+      const where = {
+        role: "AGENT" as const,
+        ...(status ? { statut: status } : {}),
+        ...(search
+          ? {
+              OR: [
+                { nom: { contains: search, mode: "insensitive" as const } },
+                { prenom: { contains: search, mode: "insensitive" as const } },
+                { matricule: { contains: search, mode: "insensitive" as const } },
+                { ministere: { contains: search, mode: "insensitive" as const } },
+                { fonction: { contains: search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      };
+      const [items, total] = await Promise.all([
+        prisma.agent.findMany({
+          where,
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            matricule: true,
+            prenom: true,
+            nom: true,
+            ministere: true,
+            fonction: true,
+            categorie: true,
+            role: true,
+            statut: true,
+            createdAt: true,
+            revokedAt: true,
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        }),
+        prisma.agent.count({ where }),
+      ]);
+      return { items, page, limit, total, totalPages: Math.ceil(total / limit) };
     },
   );
 
@@ -148,17 +210,33 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
   app.get(
     "/admin/audit-events",
     { preHandler: [app.requireAuth, app.requireAdmin] },
-    async () => prisma.auditLog.findMany({ take: 50, orderBy: { createdAt: "desc" } }),
+    async (req) => {
+      const { page, limit, skip } = pagination(req);
+      const [items, total] = await Promise.all([
+        prisma.auditLog.findMany({ skip, take: limit, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
+        prisma.auditLog.count(),
+      ]);
+      return { items, page, limit, total, totalPages: Math.ceil(total / limit) };
+    },
   );
   app.get(
     "/admin/retentions",
     { preHandler: [app.requireAuth, app.requireAdmin] },
-    async () =>
-      prisma.retraitCryptographique.findMany({
-        where: { statut: { not: "TERMINE" } },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, groupeId: true, agentId: true, statut: true, erreur: true, createdAt: true, updatedAt: true },
-      }),
+    async (req) => {
+      const { page, limit, skip } = pagination(req);
+      const where = { statut: { not: "TERMINE" as const } };
+      const [items, total] = await Promise.all([
+        prisma.retraitCryptographique.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true, groupeId: true, agentId: true, statut: true, erreur: true, createdAt: true, updatedAt: true },
+        }),
+        prisma.retraitCryptographique.count({ where }),
+      ]);
+      return { items, page, limit, total, totalPages: Math.ceil(total / limit) };
+    },
   );
 
   // ---- Présence : agents en ligne parmi MES groupes ---------------------

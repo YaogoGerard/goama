@@ -9,13 +9,22 @@ import PreInscrireModal from "./components/PreInscrireModal.vue";
 import AuditLogs from "./components/AuditLogs.vue";
 
 const authenticated = ref(api.isAuthenticated());
-const currentTab = ref<"dashboard" | "agents" | "audit">("dashboard");
+const currentTab = ref<"dashboard" | "audit">("dashboard");
 const theme = ref<"dark" | "light">("dark");
 
 const stats = ref<Stats>({ total: 0, actifs: 0, preInscrits: 0, revoques: 0, groupes: 0 });
 const agents = ref<Agent[]>([]);
+const agentsPage = ref(1);
+const agentsTotalPages = ref(1);
+const agentsSearch = ref("");
+const agentsStatus = ref("ALL");
+let agentsFilterTimer: ReturnType<typeof setTimeout> | undefined;
 const logs = ref<AuditLog[]>([]);
+const logsPage = ref(1);
+const logsTotalPages = ref(1);
 const retentions = ref<Retention[]>([]);
+const retentionsPage = ref(1);
+const retentionsTotalPages = ref(1);
 const identity = ref<AdminIdentity | null>(null);
 
 const loading = ref(false);
@@ -43,15 +52,25 @@ async function loadData() {
     const [me, st, ag, lg, rt] = await Promise.all([
       api.getIdentity(),
       api.getStats(),
-      api.getAgents(),
-      api.getAuditLogs(),
-      api.getRetentions(),
+      agentsPage.value === 1 && !agentsSearch.value && agentsStatus.value === "ALL"
+        ? api.getAgents()
+        : api.getAgentsPage(agentsPage.value, undefined, agentsSearch.value, agentsStatus.value),
+      logsPage.value === 1 ? api.getAuditLogs() : api.getAuditLogsPage(logsPage.value),
+      retentionsPage.value === 1 ? api.getRetentions() : api.getRetentionsPage(retentionsPage.value),
     ]);
     identity.value = me;
     stats.value = st;
-    agents.value = ag;
-    logs.value = lg;
-    retentions.value = rt;
+    agents.value = Array.isArray(ag) ? ag : ag.items;
+    agentsPage.value = ag.page ?? agentsPage.value;
+    agentsTotalPages.value = ag.totalPages ?? 1;
+    logs.value = Array.isArray(lg) ? lg : lg.items;
+    logsPage.value = lg.page ?? logsPage.value;
+    logsTotalPages.value = lg.totalPages ?? 1;
+    retentions.value = Array.isArray(rt) ? rt : rt.items;
+    if (!Array.isArray(rt)) {
+      retentionsPage.value = rt.page;
+      retentionsTotalPages.value = rt.totalPages;
+    }
   } catch (err: any) {
     if (err.message === "session_fermee") {
       authenticated.value = false;
@@ -80,6 +99,29 @@ function onPreInscriptionSuccess() {
   loadData();
 }
 
+function changeAgentsPage(page: number) {
+  agentsPage.value = page;
+  loadData();
+}
+
+function filterAgents(search: string, status: string) {
+  agentsSearch.value = search;
+  agentsStatus.value = status;
+  agentsPage.value = 1;
+  if (agentsFilterTimer) clearTimeout(agentsFilterTimer);
+  agentsFilterTimer = setTimeout(() => loadData(), 250);
+}
+
+function changeLogsPage(page: number) {
+  logsPage.value = page;
+  loadData();
+}
+
+function changeRetentionsPage(page: number) {
+  retentionsPage.value = page;
+  loadData();
+}
+
 onMounted(() => {
   document.documentElement.setAttribute("data-theme", theme.value);
   if (authenticated.value) {
@@ -97,10 +139,10 @@ onMounted(() => {
     <!-- Barre latérale -->
     <aside class="sidebar">
       <div class="brand">
-        <div class="mark">G</div>
+        <img class="brand-logo" src="/goama-logo.png" alt="Goama" />
         <div>
           <strong>Goama</strong>
-          <small>Administration</small>
+          <small>Espace admin</small>
         </div>
       </div>
 
@@ -116,22 +158,7 @@ onMounted(() => {
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          <span>Tableau de bord</span>
-        </button>
-
-        <button
-          type="button"
-          :class="{ active: currentTab === 'agents' }"
-          @click="currentTab = 'agents'"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="9" cy="8" r="3.5" />
-            <path d="M3 19.5c.7-3 3-4.5 6-4.5s5.3 1.5 6 4.5" />
-            <circle cx="17" cy="9" r="2.5" />
-            <path d="M17.5 14.5c1.8.4 3 1.6 3.5 3.5" />
-          </svg>
-          <span>Gestion des agents</span>
-          <span class="count">{{ agents.length }}</span>
+          <span>Vue d’ensemble</span>
         </button>
 
         <button
@@ -143,7 +170,7 @@ onMounted(() => {
             <path d="M6 3h9l4 4v14H6z" />
             <path d="M15 3v4h4M9 12h7M9 16h7" />
           </svg>
-          <span>Journal d'audit</span>
+          <span>Activité</span>
         </button>
       </nav>
 
@@ -170,7 +197,7 @@ onMounted(() => {
           <div class="avatar">AD</div>
           <div>
             <strong>{{ identity?.matricule ?? "Administrateur" }}</strong>
-            <small>Administrateur officiel</small>
+            <small>Compte administrateur</small>
           </div>
         </div>
       </div>
@@ -180,15 +207,9 @@ onMounted(() => {
     <div class="content">
       <header class="topbar">
         <div class="crumb">
-          Goama Admin <span>/</span>
+          Goama <span>/</span>
           <b>
-            {{
-              currentTab === 'dashboard'
-                ? 'Tableau de bord'
-                : currentTab === 'agents'
-                  ? 'Gestion des agents'
-                  : "Journal d'audit"
-            }}
+            {{ currentTab === 'dashboard' ? 'Vue d’ensemble' : 'Activité' }}
           </b>
         </div>
         <div class="top-actions">
@@ -205,15 +226,8 @@ onMounted(() => {
         </div>
         <div class="intro">
           <div>
-            <p class="eyebrow">Espace d’administration</p>
             <h1>
-              {{
-                currentTab === 'dashboard'
-                  ? 'Tableau de bord'
-                  : currentTab === 'agents'
-                    ? 'Gestion des agents'
-                    : "Journal d'activité"
-              }}
+              {{ currentTab === 'dashboard' ? 'Vue d’ensemble' : 'Activité' }}
             </h1>
             <p>Gérez les agents et suivez l’activité de votre organisation.</p>
           </div>
@@ -238,28 +252,44 @@ onMounted(() => {
                   {{ retention.statut === 'ECHEC' ? "Échec" : "En attente" }}
                 </span>
               </div>
+              <div v-if="retentionsTotalPages > 1" class="pagination">
+                <button class="row-action" type="button" :disabled="retentionsPage <= 1" @click="changeRetentionsPage(retentionsPage - 1)">
+                  ← Précédente
+                </button>
+                <span>Page {{ retentionsPage }} sur {{ retentionsTotalPages }}</span>
+                <button class="row-action" type="button" :disabled="retentionsPage >= retentionsTotalPages" @click="changeRetentionsPage(retentionsPage + 1)">
+                  Suivante →
+                </button>
+              </div>
             </div>
           </section>
 
           <section class="section">
             <div class="section-head">
-              <h2>Agents récents</h2>
-              <button class="link" type="button" @click="currentTab = 'agents'">
-                Voir tous les agents →
-              </button>
+              <h2>Agents</h2>
             </div>
-            <AgentTable :agents="agents.slice(0, 5)" :loading="loading" @refresh="loadData" />
+            <AgentTable
+              :agents="agents"
+              :loading="loading"
+              :page="agentsPage"
+              :total-pages="agentsTotalPages"
+              @page="changeAgentsPage"
+              @filter="filterAgents"
+              @refresh="loadData"
+            />
           </section>
-        </template>
-
-        <!-- Vue Agents complète -->
-        <template v-else-if="currentTab === 'agents'">
-          <AgentTable :agents="agents" :loading="loading" @refresh="loadData" />
         </template>
 
         <!-- Vue Journal d'audit -->
         <template v-else-if="currentTab === 'audit'">
-          <AuditLogs :logs="logs" :loading="loading" @refresh="loadData" />
+          <AuditLogs
+            :logs="logs"
+            :loading="loading"
+            :page="logsPage"
+            :total-pages="logsTotalPages"
+            @page="changeLogsPage"
+            @refresh="loadData"
+          />
         </template>
       </main>
     </div>

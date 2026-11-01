@@ -27,9 +27,19 @@ const SchemaEnv = z.object({
   WS_AUTH_TIMEOUT_MS: z.coerce.number().default(5000),
   // "true" = reflète l'origine (développement) ; sinon une origine exacte
   CORS_ORIGIN: z.string().default("true"),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DEMO_AUTH_BYPASS_TOTP: z.coerce.boolean().default(false),
+  DEMO_ADMIN_MATRICULE: z.string().default("ADMIN001"),
+  PUBLIC_WEB_URL: z.string().default("http://localhost:3000"),
+  PUBLIC_ADMIN_URL: z.string().default("http://localhost:5173"),
+  PUBLIC_API_URL: z.string().default("http://localhost:8080"),
 });
 
 export const config = SchemaEnv.parse(process.env);
+
+if (config.NODE_ENV === "production" && config.DEMO_AUTH_BYPASS_TOTP) {
+  throw new Error("DEMO_AUTH_BYPASS_TOTP est interdit en production.");
+}
 
 if (config.JWT_SECRET === "secret-de-dev-changez-moi") {
   console.warn("[goama] ATTENTION : JWT_SECRET par défaut — à définir en production (REQ-OPS-002)");

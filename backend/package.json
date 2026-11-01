@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx seed/seed.ts",
+    "db:seed:demo": "tsx seed/seed.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "demo": "tsx scripts/demo-flux-api.ts",
     "postinstall": "prisma generate"

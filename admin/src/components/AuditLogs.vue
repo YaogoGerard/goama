@@ -4,10 +4,13 @@ import type { AuditLog } from "../types.js";
 defineProps<{
   logs: AuditLog[];
   loading: boolean;
+  page?: number;
+  totalPages?: number;
 }>();
 
 const emit = defineEmits<{
   (e: "refresh"): void;
+  (e: "page", page: number): void;
 }>();
 
 function formatAction(action: string) {
@@ -46,7 +49,7 @@ function formatDate(iso: string) {
   <div class="panel">
     <div class="toolbar" style="justify-content: space-between; align-items: center">
       <div style="font-size: 13px; color: var(--muted)">
-        Historique des actions réalisées dans l’administration
+        Historique des actions
       </div>
       <button class="row-action" type="button" @click="emit('refresh')">
         ↻ Actualiser les journaux
@@ -92,15 +95,15 @@ function formatDate(iso: string) {
         </tbody>
       </table>
     </div>
-
-    <div class="privacy">
-      <svg viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--success); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round">
-        <path d="M4.5 12.5l5 5 10-11" />
-      </svg>
-      <div>
-        <strong>Historique protégé</strong>
-        Les données sensibles et le contenu des conversations ne sont jamais affichés ici.
-      </div>
+    <div v-if="(totalPages ?? 1) > 1" class="pagination">
+      <button class="row-action" type="button" :disabled="(page ?? 1) <= 1" @click="emit('page', (page ?? 1) - 1)">
+        ← Précédente
+      </button>
+      <span>Page {{ page ?? 1 }} sur {{ totalPages }} · 10 événements par page</span>
+      <button class="row-action" type="button" :disabled="(page ?? 1) >= (totalPages ?? 1)" @click="emit('page', (page ?? 1) + 1)">
+        Suivante →
+      </button>
     </div>
+
   </div>
 </template>

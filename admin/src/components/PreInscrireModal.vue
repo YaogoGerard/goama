@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { api } from "../api/client.js";
-import type { PreInscriptionResult } from "../types.js";
+import type { PreInscriptionResult, ReferenceData } from "../types.js";
 
 const emit = defineEmits<{
   (e: "close"): void;
@@ -12,9 +12,9 @@ const form = reactive({
   matricule: "",
   nom: "",
   prenom: "",
-  ministere: "Ministère de la Transition Digitale",
-  fonction: "Chef de Service",
-  categorie: "A",
+  ministere: "",
+  fonction: "",
+  categorie: "",
 });
 
 const loading = ref(false);
@@ -22,31 +22,21 @@ const error = ref<string | null>(null);
 const result = ref<PreInscriptionResult | null>(null);
 const copied = ref(false);
 
-const POSTES_OFFICIELS = [
-  { label: "Chef de Service (Parrain habilité)", value: "Chef de Service" },
-  { label: "Directeur Central / Sectoriel (Parrain habilité)", value: "Directeur Central" },
-  { label: "Directeur Général (Parrain habilité)", value: "Directeur Général" },
-  { label: "Secrétaire Général (Parrain habilité)", value: "Secrétaire Général" },
-  { label: "Directeur de Cabinet (Parrain habilité)", value: "Directeur de Cabinet" },
-  { label: "Inspecteur Technique (Parrain habilité)", value: "Inspecteur Technique" },
-  { label: "Ministre (Parrain habilité)", value: "Ministre" },
-  { label: "Conseiller Technique (Sans parrainage)", value: "Conseiller Technique" },
-  { label: "Chargé de Mission (Sans parrainage)", value: "Chargé de Mission" },
-  { label: "Chargé d'Études (Sans parrainage)", value: "Chargé d'Études" },
-  { label: "Secrétaire Particulier (Sans parrainage)", value: "Secrétaire Particulier" },
-  { label: "Administrateur Système / IT (Sans parrainage)", value: "Administrateur Système" },
-  { label: "Rédacteur / Agent technique (Sans parrainage)", value: "Rédacteur" },
-];
+const referenceData = ref<ReferenceData>({ categories: [], ministeres: [], postes: [] });
+const loadingReferenceData = ref(true);
 
-const MINISTERES = [
-  "Ministère de la Transition Digitale, des Postes et des Communications Électroniques",
-  "Ministère de l'Économie et des Finances",
-  "Ministère de l'Administration Territoriale et de la Sécurité",
-  "Ministère des Affaires Étrangères",
-  "Ministère de la Santé",
-  "Ministère de l'Éducation Nationale",
-  "Secrétariat Général du Gouvernement",
-];
+onMounted(async () => {
+  try {
+    referenceData.value = await api.getReferenceData();
+    form.categorie = referenceData.value.categories[0] ?? "";
+      form.fonction = referenceData.value.postes[0]?.value ?? "";
+    form.ministere = referenceData.value.ministeres[0] ?? "";
+  } catch {
+    error.value = "Impossible de charger les référentiels.";
+  } finally {
+    loadingReferenceData.value = false;
+  }
+});
 
 async function submitPreInscription() {
   loading.value = true;
@@ -90,7 +80,7 @@ function copyCode() {
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
-          <span class="eyebrow">Enrôlement officiel</span>
+          <span class="eyebrow">Nouvel accès</span>
           <h3>Pré-inscrire un agent</h3>
         </div>
         <button class="icon close-btn" type="button" @click="emit('close')">✕</button>
@@ -104,7 +94,7 @@ function copyCode() {
         </p>
 
         <div class="code-box">
-          <div class="code-label">Code d'activation (valable 24 h — REQ-ID-002)</div>
+          <div class="code-label">Code d'activation · valable 24 h</div>
           <div class="code-value">{{ result?.codeActivation }}</div>
           <button type="button" class="primary copy-btn" @click="copyCode">
             {{ copied ? "✓ Copié dans le presse-papier !" : "Copier le code" }}
@@ -133,7 +123,15 @@ function copyCode() {
           <div>{{ error }}</div>
         </div>
 
-        <div class="form-row">
+        <div class="form-section">
+          <div class="form-section-title">
+            <span class="section-number">01</span>
+            <div>
+              <strong>Identité professionnelle</strong>
+            </div>
+          </div>
+
+          <div class="form-row">
           <div class="form-group">
             <label for="agentMatricule">Matricule professionnel *</label>
             <input
@@ -148,17 +146,15 @@ function copyCode() {
 
           <div class="form-group">
             <label for="agentCategorie">Catégorie fonction publique *</label>
-            <select id="agentCategorie" v-model="form.categorie" class="field" required>
-              <option value="P">P (Hors catégorie / Cadre supérieur)</option>
-              <option value="A">A (Cadre supérieur / Ingénieur)</option>
-              <option value="B">B (Cadre moyen / Technicien)</option>
-              <option value="C">C (Agent d'application)</option>
-              <option value="D">D (Agent d'exécution)</option>
+            <select id="agentCategorie" v-model="form.categorie" class="field" required :disabled="loadingReferenceData">
+              <option v-for="categorie in referenceData.categories" :key="categorie" :value="categorie">
+                {{ categorie === "HORS_CATEGORIE" ? "Hors catégorie" : categorie }}
+              </option>
             </select>
           </div>
-        </div>
+          </div>
 
-        <div class="form-row">
+          <div class="form-row">
           <div class="form-group">
             <label for="agentNom">Nom *</label>
             <input
@@ -182,34 +178,41 @@ function copyCode() {
               required
             />
           </div>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="agentPoste">Poste officiel (Habilitation au parrainage ADR-12) *</label>
-          <select id="agentPoste" v-model="form.fonction" class="field" required>
-            <option v-for="poste in POSTES_OFFICIELS" :key="poste.value" :value="poste.value">
-              {{ poste.label }}
-            </option>
-          </select>
-          <small class="field-hint">
-            La capacité de parrainage se déduit du poste officiel, jamais de la catégorie seule (REQ-AUTHZ-005).
-          </small>
-        </div>
+        <div class="form-section">
+          <div class="form-section-title">
+            <span class="section-number">02</span>
+            <div>
+              <strong>Rattachement administratif</strong>
+            </div>
+          </div>
 
-        <div class="form-group">
-          <label for="agentMinistere">Ministère de rattachement *</label>
-          <select id="agentMinistere" v-model="form.ministere" class="field" required>
-            <option v-for="min in MINISTERES" :key="min" :value="min">
-              {{ min }}
-            </option>
-          </select>
+          <div class="form-group">
+            <label for="agentPoste">Poste officiel *</label>
+          <select id="agentPoste" v-model="form.fonction" class="field" required :disabled="loadingReferenceData">
+              <option v-for="poste in referenceData.postes" :key="poste.value" :value="poste.value">
+                {{ poste.label }} ({{ poste.parrainage ? "Parrain habilité" : "Sans parrainage" }})
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="agentMinistere">Ministère de rattachement *</label>
+            <select id="agentMinistere" v-model="form.ministere" class="field" required :disabled="loadingReferenceData">
+              <option v-for="min in referenceData.ministeres" :key="min" :value="min">
+                {{ min }}
+              </option>
+            </select>
+          </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" class="row-action" @click="emit('close')" :disabled="loading">
             Annuler
           </button>
-          <button type="submit" class="primary" :disabled="loading">
+          <button type="submit" class="primary" :disabled="loading || loadingReferenceData || !form.ministere">
             <span v-if="loading">Génération en cours...</span>
             <span v-else>Pré-inscrire et générer le code 24 h</span>
           </button>
@@ -261,7 +264,7 @@ function copyCode() {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 22px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -271,6 +274,52 @@ function copyCode() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.form-section + .form-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-section-title strong,
+.form-section-title small {
+  display: block;
+}
+
+.form-section-title strong {
+  font-size: 13px;
+}
+
+.form-section-title small {
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 11px;
+}
+
+.section-number {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .form-group {
@@ -285,14 +334,14 @@ function copyCode() {
   color: var(--muted);
 }
 
-.field-hint {
-  font-size: 11px;
-  color: var(--subtle);
-  line-height: 1.4;
+.form-group .field {
+  width: 100%;
 }
 
 .modal-footer {
-  margin-top: 8px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -368,5 +417,42 @@ function copyCode() {
 
 .finish-btn {
   width: 100%;
+}
+
+@media (max-width: 639px) {
+  .modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .modal-dialog {
+    max-height: 94vh;
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto;
+  }
+
+  .modal-header,
+  .modal-body,
+  .activation-result {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer button {
+    width: 100%;
+  }
+
+  .code-value {
+    font-size: 26px;
+  }
 }
 </style>
