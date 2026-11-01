@@ -75,6 +75,7 @@
 | T-069 | L'Administrateur cherche une opération de groupe dans le tableau de bord | Aucune opération de groupe n'est proposée ni acceptée | REQ-GRP-005 | A |
 | T-070 | Sur une installation vierge, lancer la commande d'amorçage, puis la relancer | Le premier Administrateur existe avec un mot de passe provisoire ; le second appel est refusé | REQ-OPS-012 | A |
 | T-071 | Chercher dans le tableau de bord et dans l'API une opération de suppression définitive de compte ; révoquer un agent et relire son annuaire | Aucune opération de suppression n'existe ; le compte révoqué reste consultable avec son statut | REQ-OPS-013 | A |
+| T-072 | Se déconnecter volontairement puis se reconnecter avec les mêmes identifiants sur le même appareil ; attendre l'expiration de session (12 h) et se reconnecter | Reconnexion acceptée dans les deux cas, sans intervention administrative ; l'appareil reste enrôlé et le compte actif | REQ-ID-010 | A |
 
 ## Épreuves du jury → tests à répéter
 

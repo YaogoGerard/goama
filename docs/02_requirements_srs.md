@@ -49,6 +49,7 @@ Une **contrainte** est une limitation imposée à la conception ; elle n'est pas
 | REQ-ID-007 | P0 | Le système DOIT vérifier à chaque opération protégée que le compte et la session sont actifs. | Invariant | G-01 |
 | REQ-ID-008 | P0 | Le système DOIT enregistrer séparément la catégorie de l'agent (P, A, B, C, D, E), son poste officiel et son ministère, et en déduire sa capacité de parrainage (`01_requirements_prd.md`, §3). | Règle métier | G-01 |
 | REQ-ID-009 | P1 | Le système DOIT traiter la perte de l'appareil ou du second facteur par la révocation de l'agent et l'émission d'un nouveau code d'activation par l'Administrateur, sans libre-service. | Processus | G-04 |
+| REQ-ID-010 | P0 | La déconnexion volontaire ou l'expiration d'une session NE DOIT PAS dégrader l'enrôlement de l'appareil ni le statut du compte : l'agent DOIT pouvoir se reconnecter sur le même appareil enrôlé par simple nouvelle authentification, sans intervention administrative ; seule la suspension ou la révocation (administrative) coupe la reconnexion. | Invariant | G-01, G-07 |
 
 ### Autorisation et rôles
 
