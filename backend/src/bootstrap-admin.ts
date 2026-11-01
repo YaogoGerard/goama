@@ -1,6 +1,6 @@
 import { prisma } from "./plugins/db.js";
 import { hasherSecret } from "./lib/crypto.js";
-import { genererSecretTotp, uriTotp } from "./lib/totp.js";
+import { genererSecretTotp } from "./lib/totp.js";
 
 const matricule = process.env.ADMIN_MATRICULE;
 const motDePasse = process.env.ADMIN_PASSWORD;
@@ -34,12 +34,6 @@ if (existant) {
     },
   });
 
-  console.log(`
-Administrateur créé :
-  Matricule   : ${matricule}
-  Mot de passe: ${motDePasse}
-  Secret TOTP : ${totp}
-  URI otpauth : ${uriTotp(totp, matricule)}
-`);
+  console.log(`Administrateur créé (${matricule}). Configurez le TOTP via un canal de provisioning sécurisé.`);
   await prisma.$disconnect();
 }

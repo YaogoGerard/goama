@@ -54,6 +54,9 @@ function fabriquerRequireAuth(app: FastifyInstance): Garde {
     if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
       return reply.code(401).send({ erreur: "session_fermee" });
     }
+    if (session.agentId !== agent.id) {
+      return reply.code(401).send({ erreur: "session_invalide" });
+    }
 
     req.agent = { id: agent.id, role: agent.role, matricule: agent.matricule, statut: agent.statut };
   };

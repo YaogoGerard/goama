@@ -41,6 +41,20 @@ if (config.NODE_ENV === "production" && config.DEMO_AUTH_BYPASS_TOTP) {
   throw new Error("DEMO_AUTH_BYPASS_TOTP est interdit en production.");
 }
 
-if (config.JWT_SECRET === "secret-de-dev-changez-moi") {
-  console.warn("[goama] ATTENTION : JWT_SECRET par défaut — à définir en production (REQ-OPS-002)");
+if (config.NODE_ENV === "production") {
+  if (config.JWT_SECRET === "secret-de-dev-changez-moi" || config.JWT_SECRET.length < 32) {
+    throw new Error("JWT_SECRET doit contenir au moins 32 caractères uniques en production.");
+  }
+  if (config.CORS_ORIGIN === "true") {
+    throw new Error("CORS_ORIGIN doit être une origine HTTPS explicite en production.");
+  }
+  for (const [name, value] of Object.entries({
+    PUBLIC_WEB_URL: config.PUBLIC_WEB_URL,
+    PUBLIC_ADMIN_URL: config.PUBLIC_ADMIN_URL,
+    PUBLIC_API_URL: config.PUBLIC_API_URL,
+  })) {
+    if (!value.startsWith("https://")) {
+      throw new Error(`${name} doit utiliser HTTPS en production.`);
+    }
+  }
 }

@@ -155,32 +155,30 @@ const sendMessage = async () => {
   const text = newMessage.value.trim()
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-  const encryptedPayload = await mlsService.encryptMessage(text, authStore.userEmail || 'agent')
-  const decryptedText = await mlsService.decryptMessage(encryptedPayload, chatId)
-  await api.sendMessage(chatId, { epoch: selectedChat.value.epoch, kind: 'mls_app', content: encryptedPayload })
-
-  const msgObj: Message = {
-    id: Date.now(),
-    chatId: chatId,
-    sender: 'Moi',
-    content: decryptedText,
-    time: timeStr,
-    sent: true,
-    timestamp: Date.now()
-  }
-
   try {
+    const encryptedPayload = await mlsService.encryptMessage(text, chatId)
+    const decryptedText = await mlsService.decryptMessage(encryptedPayload, chatId)
+    await api.sendMessage(chatId, { epoch: selectedChat.value.epoch, kind: 'mls_app', content: encryptedPayload })
+
+    const msgObj: Message = {
+      id: Date.now(),
+      chatId,
+      sender: 'Moi',
+      content: decryptedText,
+      time: timeStr,
+      sent: true,
+      timestamp: Date.now()
+    }
+
     await localDB.saveMessage(msgObj)
-  } catch (err) {
-    console.error('Erreur de sauvegarde IndexedDB :', err)
+    messagesMap.value[chatId].push(msgObj)
+    selectedChat.value.lastMessage = text
+    selectedChat.value.time = timeStr
+    newMessage.value = ''
+    scrollToBottom()
+  } catch {
+    errorMessage.value = 'Le message n’a pas pu être chiffré ou envoyé.'
   }
-
-  messagesMap.value[chatId].push(msgObj)
-  selectedChat.value.lastMessage = text
-  selectedChat.value.time = timeStr
-
-  newMessage.value = ''
-  scrollToBottom()
 }
 
 const triggerFileInput = () => {
@@ -200,8 +198,9 @@ const handleFileUpload = async (event: Event) => {
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const attachmentText = `📎 [Pièce jointe sécurisée] ${file.name} (${Math.round(file.size / 1024)} Ko)`
 
-  const encryptedPayload = await mlsService.encryptMessage(attachmentText, authStore.userEmail || 'agent')
+  const encryptedPayload = await mlsService.encryptMessage(attachmentText, chatId)
   const decryptedText = await mlsService.decryptMessage(encryptedPayload, chatId)
+  await api.sendMessage(chatId, { epoch: selectedChat.value.epoch, kind: 'mls_app', content: encryptedPayload })
 
   const msgObj: Message = {
     id: Date.now(),
@@ -299,6 +298,7 @@ onMounted(loadWorkspace)
         <button 
           :class="{ active: activeTab === 'chats' }" 
           @click="activeTab = 'chats'" 
+          aria-label="Discussions"
           title="Discussions"
         >
           💬
@@ -306,6 +306,7 @@ onMounted(loadWorkspace)
         <button 
           :class="{ active: activeTab === 'annuaire' }" 
           @click="activeTab = 'annuaire'" 
+          aria-label="Annuaire officiel"
           title="Annuaire officiel"
         >
           👥
@@ -313,13 +314,14 @@ onMounted(loadWorkspace)
         <button 
           :class="{ active: activeTab === 'settings' }" 
           @click="activeTab = 'settings'" 
+          aria-label="Paramètres de sécurité"
           title="Paramètres de sécurité"
         >
           ⚙️
         </button>
       </nav>
       <div class="nav-footer">
-        <button class="logout-btn" @click="handleLogout" title="Déconnexion">
+        <button class="logout-btn" @click="handleLogout" aria-label="Déconnexion" title="Déconnexion">
           🚪
         </button>
       </div>

@@ -1,63 +1,92 @@
-// Wrapper OpenMLS (WASM) pour le chiffrement de bout en bout (E2EE) de Goama
+const DB_NAME = 'GoamaCryptoDB'
+const DB_VERSION = 1
+const STORE_KEYS = 'groupKeys'
 
-let wasmModule: any = null
+type KeyRecord = {
+  groupId: string
+  key: CryptoKey
+}
+
+function openKeyDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(STORE_KEYS, { keyPath: 'groupId' })
+    }
+  })
+}
+
+async function loadOrCreateKey(groupId: string): Promise<CryptoKey> {
+  const db = await openKeyDb()
+  const existing = await new Promise<KeyRecord | undefined>((resolve, reject) => {
+    const request = db.transaction(STORE_KEYS, 'readonly').objectStore(STORE_KEYS).get(groupId)
+    request.onsuccess = () => resolve(request.result as KeyRecord | undefined)
+    request.onerror = () => reject(request.error)
+  })
+  if (existing?.key) return existing.key
+
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+  await new Promise<void>((resolve, reject) => {
+    const request = db.transaction(STORE_KEYS, 'readwrite').objectStore(STORE_KEYS).put({ groupId, key } satisfies KeyRecord)
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+  })
+  return key
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function fromBase64(value: string): Uint8Array {
+  const binary = atob(value)
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+}
 
 export const mlsService = {
-  // Initialisation du module WASM OpenMLS
   async init(): Promise<void> {
-    if (wasmModule) return
-    try {
-      // Chargement dynamique du module WASM OpenMLS (fourni par Gérard ou l'équipe crypto)
-      // wasmModule = await import('@openmls/wasm')
-      // await wasmModule.default()
-      console.log("🔒 Module OpenMLS (WASM) initialisé avec succès.")
-    } catch (error) {
-      console.warn("⚠️ Mode simulation OpenMLS actif (WASM non chargé).", error)
+    if (!globalThis.crypto?.subtle || !globalThis.indexedDB) {
+      throw new Error('Web Crypto et IndexedDB sont nécessaires pour la messagerie.')
     }
   },
 
-  // Générer un KeyPackage d'État pour l'enrôlement
   async generateKeyPackage(): Promise<string> {
-    await this.init()
-    // Si le module WASM est chargé, on appelle sa méthode, sinon simulation
-    if (wasmModule && wasmModule.createKeyPackage) {
-      return wasmModule.createKeyPackage()
-    }
-    // Simulation sécurisée pour le développement
-    const fakeKey = 'mls-key-package-' + Math.random().toString(36).substring(2, 15)
-    return btoa(fakeKey)
+    throw new Error('Les KeyPackages MLS nécessitent le module OpenMLS WASM.')
   },
 
-  // Chiffrer un message pour le groupe MLS
   async encryptMessage(plainText: string, groupId: string): Promise<string> {
     await this.init()
-    if (wasmModule && wasmModule.encrypt) {
-      return wasmModule.encrypt(groupId, plainText)
-    }
-    // Chiffrement de substitution (Base64 + sel souverain)
-    return btoa(unescape(encodeURIComponent(plainText)))
+    const key = await loadOrCreateKey(groupId)
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encoded = new TextEncoder().encode(plainText)
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded))
+    return `v1.${toBase64(iv)}.${toBase64(ciphertext)}`
   },
 
-  // Déchiffrer un message reçu du groupe MLS
-  async decryptMessage(cipherText: string, groupId: string): Promise<string> {
+  async decryptMessage(payload: string, groupId: string): Promise<string> {
     await this.init()
-    if (wasmModule && wasmModule.decrypt) {
-      return wasmModule.decrypt(groupId, cipherText)
-    }
-    // Déchiffrement de substitution
-    try {
-      return decodeURIComponent(escape(atob(cipherText)))
-    } catch (e) {
-      return cipherText // Retourne le texte brut si le décodage échoue
-    }
+    const [version, ivValue, ciphertextValue] = payload.split('.')
+    if (version !== 'v1' || !ivValue || !ciphertextValue) throw new Error('message_chiffre_invalide')
+    const key = await loadOrCreateKey(groupId)
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(ivValue) as BufferSource },
+      key,
+      fromBase64(ciphertextValue) as BufferSource,
+    )
+    return new TextDecoder().decode(plaintext)
   },
 
-  // Réinitialiser les états cryptographiques (utilisé lors du Protocole Panique)
   async resetCryptoContext(): Promise<void> {
     await this.init()
-    if (wasmModule && wasmModule.clearState) {
-      wasmModule.clearState()
-    }
-    console.log("🧹 Contexte cryptographique purgé.")
-  }
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(DB_NAME)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => resolve()
+    })
+  },
 }

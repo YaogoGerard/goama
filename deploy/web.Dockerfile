@@ -5,14 +5,8 @@
 # web/ reste strictement celui du dépôt distance (commit 84e5bad), jamais
 # retouché pour l'infrastructure.
 #
-# Deux contournements requis par l'état actuel du code pullé :
-#   1. npm ci --no-save pinia vue-router : le code source (stores, router,
-#      ChatView) importe `pinia` et `vue-router` absents de package.json.
-#      Ils sont installés dans l'IMAGE uniquement, jamais dans le dépôt.
-#   2. `npx vite build` sans `vue-tsc -b` : le type-check échoue sur des
-#      erreurs réelles du code pullé (decryptMessage appelé sans groupId,
-#      alert() dans un template Vue). Le bundle est tout de même généré ; le
-#      type-check devra être réparé côté dépôt web/ par son auteur.
+# Le frontend déclare toutes ses dépendances dans package.json :
+# l'image utilise donc uniquement le lockfile versionné et le build complet.
 # Pourquoi node:22-slim (glibc) et pas alpine (musl) : vite ^8 repose sur
 # rolldown, un binaire natif ; le lockfile (généré sur glibc) ne contient que
 # @rolldown/binding-linux-x64-gnu et npm n'installe pas le binding musl
@@ -21,9 +15,13 @@ FROM node:22-slim AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci && npm i --no-save pinia@3 vue-router@4
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 2 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm ci
 COPY . .
-RUN npx vite build
+RUN npm run build
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
