@@ -1,41 +1,64 @@
-// Service API pour Goama (Endpoints ministériels)
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.ministere.gov.bf/v1'
-
-export const apiService = {
-  // Authentification de l'agent
-  async login(email: string, clearanceKey: string) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, clearanceKey })
-      })
-      if (!response.ok) throw new Error("Échec de l'authentification sécurisée")
-      return await response.json()
-    } catch (error) {
-      console.error("API Login Error:", error)
-      // Mode hors-ligne / Simulation locale pour le développement
-      return { token: 'mock-jwt-token-souverain', status: 'success' }
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('goama_token')
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers ?? {})
     }
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { erreur?: string } | null
+    throw new Error(body?.erreur ?? 'requete_echouee')
+  }
+  return response.json() as Promise<T>
+}
+
+export interface AuthResponse {
+  jeton: string
+  sessionId: string
+}
+
+export interface Agent {
+  id: string
+  prenom: string
+  nom: string
+  ministere: string
+  fonction: string
+}
+
+export interface Group {
+  id: string
+  epoch: number
+  monRole: string
+  membres: { agentId: string; role: string }[]
+}
+
+export const api = {
+  login(payload: { matricule: string; secret: string; codeTotp: string }) {
+    return request<AuthResponse>('/auth/connexion', { method: 'POST', body: JSON.stringify(payload) })
   },
-
-  // Envoi ou distribution des KeyPackages MLS au serveur de Gérard
-  async uploadKeyPackage(keyPackage: any) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/mls/key-package`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('goama_token') || ''}`
-        },
-        body: JSON.stringify({ keyPackage })
-      })
-      if (!response.ok) throw new Error("Erreur d'enrôlement KeyPackage")
-      return await response.json()
-    } catch (error) {
-      console.error("API KeyPackage Error:", error)
-      return { status: 'simulated-success' }
-    }
+  logout() {
+    return request<{ ok: boolean }>('/auth/deconnexion', { method: 'POST' })
+  },
+  agents() {
+    return request<Agent[]>('/agents')
+  },
+  groups() {
+    return request<Group[]>('/groupes')
+  },
+  sendMessage(groupId: string, payload: { epoch: number; kind: 'mls_app'; content: string }) {
+    return request(`/groupes/${groupId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  },
+  messages(groupId: string) {
+    return request<{ seq: number; epoch: number; kind: string; content: string; createdAt: string; senderId: string }[]>(
+      `/groupes/${groupId}/messages`
+    )
   }
 }

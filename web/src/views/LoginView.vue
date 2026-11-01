@@ -2,33 +2,34 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { api } from '../services/api'
 import logoSrc from '../assets/logo.png'
 
 const router = useRouter()
 const authStore = useAuthStore()
-
-const email = ref('agent@ministere.gov.bf')
-const password = ref('')
+const matricule = ref('')
+const secret = ref('')
+const codeTotp = ref('')
 const errorMessage = ref('')
 const isLoading = ref(false)
 
 const handleLogin = async () => {
-  if (!email.value.trim() || !password.value.trim()) {
-    errorMessage.value = "Veuillez renseigner tous les champs de sécurité."
+  if (!matricule.value.trim() || !secret.value || !/^\d{6}$/.test(codeTotp.value)) {
+    errorMessage.value = 'Renseignez votre matricule, votre mot de passe et le code à 6 chiffres.'
     return
   }
-
   isLoading.value = true
   errorMessage.value = ''
-
   try {
-    // Simulation d'une vérification d'authentification chiffrée
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    authStore.login(email.value, 'Secret Défense')
-    router.push('/chat')
-  } catch (err) {
-    errorMessage.value = "Échec de l'authentification cryptographique."
+    const session = await api.login({
+      matricule: matricule.value.trim(),
+      secret: secret.value,
+      codeTotp: codeTotp.value
+    })
+    authStore.login(matricule.value.trim(), session.jeton)
+    await router.push('/chat')
+  } catch {
+    errorMessage.value = 'Identifiants ou code de sécurité invalides.'
   } finally {
     isLoading.value = false
   }
@@ -36,163 +37,39 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="logo-wrapper">
-        <img :src="logoSrc" alt="Logo Goama" class="login-logo" />
-      </div>
-      <h2>Portail Sécurisé Goama</h2>
-      <p class="subtitle">Chiffrement E2EE - OpenMLS & IndexedDB</p>
-
-      <form @submit.prevent="handleLogin" class="login-form">
-        <div v-if="errorMessage" class="error-banner">
-          {{ errorMessage }}
-        </div>
-
-        <div class="input-group">
-          <label for="email">Identifiant Agent (E-mail)</label>
-          <input 
-            type="email" 
-            id="email" 
-            v-model="email" 
-            placeholder="agent@ministere.gov.bf" 
-            required 
-          />
-        </div>
-
-        <div class="input-group">
-          <label for="password">Clé d'accès / Mot de passe</label>
-          <input 
-            type="password" 
-            id="password" 
-            v-model="password" 
-            placeholder="••••••••••••" 
-            required 
-          />
-        </div>
-
-        <button type="submit" class="submit-btn" :disabled="isLoading">
-          {{ isLoading ? 'Connexion sécurisée en cours...' : 'Accéder au réseau chiffré' }}
-        </button>
+  <main class="login-page">
+    <section class="login-card">
+      <img :src="logoSrc" alt="Goama" class="login-logo">
+      <p class="eyebrow">Messagerie professionnelle</p>
+      <h1>Bienvenue sur Goama</h1>
+      <p class="intro">Accédez à vos échanges avec votre identité professionnelle.</p>
+      <form class="login-form" @submit.prevent="handleLogin">
+        <div v-if="errorMessage" class="error-banner" role="alert">{{ errorMessage }}</div>
+        <label>Matricule <input v-model="matricule" autocomplete="username" placeholder="Ex. AG001" required></label>
+        <label>Mot de passe <input v-model="secret" type="password" autocomplete="current-password" required></label>
+        <label>Code de vérification <input v-model="codeTotp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required></label>
+        <button class="submit-btn" type="submit" :disabled="isLoading">{{ isLoading ? 'Connexion…' : 'Se connecter' }}</button>
       </form>
-    </div>
-  </div>
+      <p class="login-note">Votre code de vérification est fourni par votre application d’authentification.</p>
+    </section>
+  </main>
 </template>
 
 <style scoped>
-.login-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100vw;
-  height: 100vh;
-  background-color: #0f172a;
-  position: fixed;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-}
-
-.login-card {
-  background-color: #ffffff;
-  padding: 2.5rem;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.logo-wrapper {
-  margin-bottom: 1rem;
-}
-
-.login-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  border-radius: 12px;
-}
-
-h2 {
-  font-size: 1.25rem;
-  color: #0f172a;
-  margin: 0 0 0.25rem 0;
-  font-weight: 700;
-  text-align: center;
-}
-
-.subtitle {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-bottom: 1.5rem;
-  text-align: center;
-}
-
-.login-form {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.input-group label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #334155;
-}
-
-.input-group input {
-  padding: 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  outline: none;
-  background-color: #f8fafc;
-  transition: border-color 0.2s;
-}
-
-.input-group input:focus {
-  border-color: #0284c7;
-}
-
-.error-banner {
-  background-color: #fee2e2;
-  color: #dc2626;
-  font-size: 0.8rem;
-  padding: 0.5rem;
-  border-radius: 6px;
-  text-align: center;
-  font-weight: 500;
-}
-
-.submit-btn {
-  background-color: #0f172a;
-  color: white;
-  border: none;
-  padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 0.5rem;
-  transition: background-color 0.2s;
-}
-
-.submit-btn:hover {
-  background-color: #1e293b;
-}
-
-.submit-btn:disabled {
-  background-color: #94a3b8;
-  cursor: not-allowed;
-}
+.login-page { min-height: 100svh; display: grid; place-items: center; padding: 1.5rem; background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%); }
+.login-card { width: min(100%, 430px); padding: clamp(1.75rem, 5vw, 2.75rem); background: #fff; border: 1px solid #e2e8f0; border-radius: 1.25rem; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); }
+.login-logo { display: block; width: 58px; height: 58px; margin: 0 auto 1.25rem; border-radius: 14px; }
+.eyebrow { margin: 0 0 .4rem; color: #0284c7; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+h1 { margin: 0; color: #0f172a; font-size: clamp(1.5rem, 4vw, 1.9rem); text-align: center; }
+.intro, .login-note { color: #64748b; font-size: .9rem; line-height: 1.5; text-align: center; }
+.intro { margin: .65rem 0 1.75rem; }
+.login-form { display: grid; gap: 1rem; }
+label { display: grid; gap: .4rem; color: #334155; font-size: .8rem; font-weight: 650; }
+input { width: 100%; padding: .8rem .9rem; border: 1px solid #cbd5e1; border-radius: .65rem; background: #f8fafc; color: #0f172a; font: inherit; outline: none; }
+input:focus { border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2, 132, 199, .15); }
+.error-banner { padding: .7rem .8rem; border-radius: .6rem; background: #fef2f2; color: #b91c1c; font-size: .8rem; }
+.submit-btn { margin-top: .25rem; padding: .85rem 1rem; border: 0; border-radius: .65rem; background: #0f172a; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.submit-btn:hover { background: #1e293b; }
+.submit-btn:disabled { cursor: wait; opacity: .65; }
+.login-note { margin: 1.25rem 0 0; font-size: .75rem; }
 </style>

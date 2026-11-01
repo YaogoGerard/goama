@@ -6,7 +6,7 @@ export class SecureWebSocketService {
   private socket: WebSocket | null = null
   private url: string
 
-  constructor(url: string = 'wss://api.ministere.gov.bf/ws/chat') {
+  constructor(url: string = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) {
     this.url = url
   }
 
@@ -32,8 +32,8 @@ export class SecureWebSocketService {
         console.log("Canal WebSocket fermé. Tentative de reconnexion...")
         setTimeout(() => this.connect(onMessageReceived), 5000)
       }
-    } catch (e) {
-      console.warn("Mode simulation WebSocket actif (Backend distant non joignable).")
+    } catch (error) {
+      console.error("Impossible d'établir le canal WebSocket.", error)
     }
   }
 

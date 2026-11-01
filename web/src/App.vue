@@ -7,7 +7,7 @@
 </template>
 
 <style>
-/* Styles globaux pour assurer un affichage plein écran sans barres de défilement parasites */
+/* L'espace de travail gère lui-même le défilement de ses panneaux. */
 html, body {
   margin: 0;
   padding: 0;

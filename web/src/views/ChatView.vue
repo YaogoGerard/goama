@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { mlsService } from '../crypto/mls'
 import { localDB } from '../db'
+import { api } from '../services/api'
 import logoSrc from '../assets/logo.png'
 
 const router = useRouter()
@@ -17,6 +18,7 @@ interface ChatItem {
   time: string
   unreadCount?: number
   classification: 'Diffusion Restreinte' | 'Secret' | 'Normal'
+  epoch: number
 }
 
 interface Message {
@@ -43,40 +45,10 @@ const showMobileChat = ref(false)
 const searchQuery = ref('')
 
 // Données des conversations brutes
-const conversationsRaw = ref<ChatItem[]>([
-  {
-    id: '1',
-    name: 'Groupe - Projet Goama (DGTD)',
-    isGroup: true,
-    lastMessage: 'OpenMLS WASM initialisé avec succès.',
-    time: '10:42',
-    unreadCount: 2,
-    classification: 'Diffusion Restreinte'
-  },
-  {
-    id: '2',
-    name: 'Direction de la Sécurité Systèmes',
-    isGroup: true,
-    lastMessage: 'Vérification des KeyPackages terminée.',
-    time: '09:15',
-    classification: 'Secret'
-  },
-  {
-    id: '3',
-    name: 'Ing. Gérard (Backend)',
-    isGroup: false,
-    lastMessage: 'L\'endpoint WebSocket est prêt pour les tests.',
-    time: 'Hier',
-    classification: 'Normal'
-  }
-])
+const conversationsRaw = ref<ChatItem[]>([])
 
 // Annuaire officiel des agents brut
-const agentsListRaw = ref<AgentItem[]>([
-  { id: 'a1', name: 'Dr. Aminata KABORE', role: 'Directrice des Systèmes d’Information', ministry: 'MTDPCE', status: 'KeyPackage Actif' },
-  { id: 'a2', name: 'Ing. Jean-Paul OUEDRAOGO', role: 'Expert Cybersécurité', ministry: 'ANSSI-BF', status: 'KeyPackage Actif' },
-  { id: 'a3', name: 'Mariam TRAORE', role: 'Conseillère Juridique Numérique', ministry: 'Primature', status: 'Enrôlé' }
-])
+const agentsListRaw = ref<AgentItem[]>([])
 
 // Filtrage dynamique via Computed
 const filteredConversations = computed(() => {
@@ -97,21 +69,10 @@ const filteredAgents = computed(() => {
   )
 })
 
-const selectedChat = ref<ChatItem | null>(conversationsRaw.value[0])
+const selectedChat = ref<ChatItem | null>(null)
 
 // Base de messages par discussion en mémoire (synchronisée avec IndexedDB)
-const messagesMap = ref<Record<string, Message[]>>({
-  '1': [
-    { id: 1, chatId: '1', sender: 'Gérard (Backend)', content: 'Les endpoints d’enrôlement et de distribution des KeyPackages MLS sont prêts.', time: '10:40', sent: false, timestamp: Date.now() - 100000 },
-    { id: 2, chatId: '1', sender: 'Moi', content: 'Parfait, l’interface Vue 3 / TypeScript est opérationnelle.', time: '10:42', sent: true, timestamp: Date.now() - 50000 }
-  ],
-  '2': [
-    { id: 1, chatId: '2', sender: 'Auditeur Sécurité', content: 'Audit de la couche OpenMLS validé.', time: '09:15', sent: false, timestamp: Date.now() - 200000 }
-  ],
-  '3': [
-    { id: 1, chatId: '3', sender: 'Gérard', content: 'L\'endpoint WebSocket est prêt pour les tests.', time: 'Hier', sent: false, timestamp: Date.now() - 300000 }
-  ]
-})
+const messagesMap = ref<Record<string, Message[]>>({})
 
 const newMessage = ref('')
 const messagesFeedRef = ref<HTMLElement | null>(null)
@@ -130,8 +91,21 @@ const selectConversation = async (chat: ChatItem) => {
   showMobileChat.value = true
 
   try {
+    const remoteMessages = await api.messages(chat.id)
+    const decryptedMessages = await Promise.all(remoteMessages
+      .filter((message) => message.kind === 'mls_app')
+      .map(async (message, index) => ({
+        id: index,
+        chatId: chat.id,
+        sender: message.senderId === authStore.userEmail ? 'Moi' : 'Membre du groupe',
+        content: await mlsService.decryptMessage(message.content, chat.id),
+        time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sent: message.senderId === authStore.userEmail,
+        timestamp: new Date(message.createdAt).getTime()
+      })))
+    messagesMap.value[chat.id] = decryptedMessages
     const dbMessages = await localDB.getMessagesByChat(chat.id)
-    if (dbMessages && dbMessages.length > 0) {
+    if (decryptedMessages.length === 0 && dbMessages && dbMessages.length > 0) {
       messagesMap.value[chat.id] = dbMessages
     }
   } catch (e) {
@@ -150,7 +124,8 @@ const startAgentChat = (agent: AgentItem) => {
       isGroup: false,
       lastMessage: 'Session OpenMLS initialisée.',
       time: 'À l\'instant',
-      classification: 'Diffusion Restreinte'
+      classification: 'Diffusion Restreinte',
+      epoch: 0
     }
     conversationsRaw.value.unshift(existing)
     messagesMap.value[existing.id] = [
@@ -181,7 +156,8 @@ const sendMessage = async () => {
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   const encryptedPayload = await mlsService.encryptMessage(text, authStore.userEmail || 'agent')
-  const decryptedText = await mlsService.decryptMessage(encryptedPayload)
+  const decryptedText = await mlsService.decryptMessage(encryptedPayload, chatId)
+  await api.sendMessage(chatId, { epoch: selectedChat.value.epoch, kind: 'mls_app', content: encryptedPayload })
 
   const msgObj: Message = {
     id: Date.now(),
@@ -225,7 +201,7 @@ const handleFileUpload = async (event: Event) => {
   const attachmentText = `📎 [Pièce jointe sécurisée] ${file.name} (${Math.round(file.size / 1024)} Ko)`
 
   const encryptedPayload = await mlsService.encryptMessage(attachmentText, authStore.userEmail || 'agent')
-  const decryptedText = await mlsService.decryptMessage(encryptedPayload)
+  const decryptedText = await mlsService.decryptMessage(encryptedPayload, chatId)
 
   const msgObj: Message = {
     id: Date.now(),
@@ -252,8 +228,34 @@ const handleFileUpload = async (event: Event) => {
 }
 
 const handleLogout = () => {
+  void api.logout().catch(() => undefined)
   authStore.logout()
   router.push('/')
+}
+
+const loadWorkspace = async () => {
+  try {
+    const [groups, agents] = await Promise.all([api.groups(), api.agents()])
+    conversationsRaw.value = groups.map((group, index) => ({
+      id: group.id,
+      name: `Groupe ${index + 1}`,
+      isGroup: true,
+      lastMessage: 'Aucun message récent',
+      time: '',
+      classification: 'Normal',
+      epoch: group.epoch
+    }))
+    agentsListRaw.value = agents.map((agent) => ({
+      id: agent.id,
+      name: `${agent.prenom} ${agent.nom}`,
+      role: agent.fonction,
+      ministry: agent.ministere,
+      status: 'Disponible'
+    }))
+    selectedChat.value = conversationsRaw.value[0] ?? null
+  } catch {
+    errorMessage.value = 'Impossible de charger votre espace de messagerie.'
+  }
 }
 
 const triggerPanicWipe = async () => {
@@ -278,6 +280,9 @@ window.addEventListener('keydown', (e) => {
 watch(selectedChat, () => {
   scrollToBottom()
 })
+
+const errorMessage = ref('')
+onMounted(loadWorkspace)
 </script>
 
 <template>
@@ -385,17 +390,18 @@ watch(selectedChat, () => {
 
       <!-- Onglet Paramètres de Sécurité -->
       <div class="settings-container" v-else-if="activeTab === 'settings'">
+        <div v-if="errorMessage" class="error-banner" role="alert">{{ errorMessage }}</div>
         <div class="settings-section">
           <h4>Identité Numérique d'État</h4>
-          <p class="settings-info"><strong>E-mail :</strong> agent@ministere.gov.bf</p>
-          <p class="settings-info"><strong>Niveau d'habilitation :</strong> Secret Défense</p>
+          <p class="settings-info"><strong>Matricule :</strong> {{ authStore.userEmail }}</p>
+          <p class="settings-info"><strong>Statut :</strong> Compte actif</p>
         </div>
 
         <div class="settings-section">
           <h4>Chiffrement de Bout en Bout</h4>
-          <p class="settings-info"><strong>Protocole :</strong> OpenMLS (WASM)</p>
-          <p class="settings-info"><strong>Stockage :</strong> IndexedDB Chiffré</p>
-          <button class="action-btn" @click="alert('Paire de clés MLS régénérée et synchronisée avec le serveur.')">
+          <p class="settings-info"><strong>Protection :</strong> Chiffrement côté client</p>
+          <p class="settings-info"><strong>Stockage :</strong> Données locales protégées</p>
+          <button class="action-btn" @click="errorMessage = 'La rotation des clés sera disponible après l’activation du client MLS.'">
             🔄 Régénérer les KeyPackages
           </button>
         </div>
