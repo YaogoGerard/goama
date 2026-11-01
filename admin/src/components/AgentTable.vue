@@ -111,7 +111,6 @@ function formatDate(iso: string | null) {
     </div>
 
     <div v-if="actionError" class="login-alert danger" style="margin: 12px">
-      <span>⚠</span>
       <div>{{ actionError }}</div>
     </div>
 
@@ -188,9 +187,11 @@ function formatDate(iso: string | null) {
     </div>
 
     <div class="privacy">
-      <span>✓</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--success); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round">
+        <path d="M4.5 12.5l5 5 10-11" />
+      </svg>
       <div>
-        <strong>Confidentialité préservée (G-06 & REQ-AUTHZ-003)</strong>
+        <strong>Confidentialité préservée (G-06 &amp; REQ-AUTHZ-003)</strong>
         Cette vue d'administration ne contient aucun message, aperçu de conversation ou pièce jointe.
         L'Administrateur ne possède aucune clé cryptographique.
       </div>

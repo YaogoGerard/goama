@@ -110,7 +110,12 @@ onMounted(() => {
           :class="{ active: currentTab === 'dashboard' }"
           @click="currentTab = 'dashboard'"
         >
-          <span>📊</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
           <span>Tableau de bord</span>
         </button>
 
@@ -119,7 +124,12 @@ onMounted(() => {
           :class="{ active: currentTab === 'agents' }"
           @click="currentTab = 'agents'"
         >
-          <span>👥</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="9" cy="8" r="3.5" />
+            <path d="M3 19.5c.7-3 3-4.5 6-4.5s5.3 1.5 6 4.5" />
+            <circle cx="17" cy="9" r="2.5" />
+            <path d="M17.5 14.5c1.8.4 3 1.6 3.5 3.5" />
+          </svg>
           <span>Gestion des agents</span>
           <span class="count">{{ agents.length }}</span>
         </button>
@@ -129,19 +139,30 @@ onMounted(() => {
           :class="{ active: currentTab === 'audit' }"
           @click="currentTab = 'audit'"
         >
-          <span>📜</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 3h9l4 4v14H6z" />
+            <path d="M15 3v4h4M9 12h7M9 16h7" />
+          </svg>
           <span>Journal d'audit</span>
         </button>
       </nav>
 
       <div class="sidebar-foot">
         <button type="button" @click="toggleTheme">
-          <span>{{ theme === 'dark' ? '☼' : '☾' }}</span>
+          <svg v-if="theme === 'dark'" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />
+          </svg>
           <span>Thème {{ theme === 'dark' ? 'clair' : 'sombre' }}</span>
         </button>
 
-        <button type="button" class="row-action" style="margin-top: 6px" @click="handleLogout">
-          <span>⎋</span>
+        <button type="button" class="row-action" style="margin-top: 6px; border: 0" @click="handleLogout">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 4h-7v16h7M10 12h11M18 9l3 3-3 3" />
+          </svg>
           <span>Déconnexion</span>
         </button>
 
@@ -172,7 +193,7 @@ onMounted(() => {
         </div>
         <div class="top-actions">
           <button class="primary" type="button" @click="showModal = true">
-            + Pré-inscrire un agent
+            Pré-inscrire un agent
           </button>
         </div>
       </header>

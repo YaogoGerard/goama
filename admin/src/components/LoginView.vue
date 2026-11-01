@@ -48,7 +48,6 @@ async function submitLogin() {
       </div>
 
       <div v-if="error" class="login-alert danger">
-        <span>⚠</span>
         <div>{{ error }}</div>
       </div>
 
@@ -139,19 +138,16 @@ async function submitLogin() {
   display: grid;
   place-items: center;
   padding: 32px 20px;
-  background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28rem),
-    var(--bg);
+  background: var(--bg);
 }
 
 .login-card {
   width: 100%;
-  max-width: 430px;
+  max-width: 420px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 38px;
-  box-shadow: var(--shadow-md);
+  border-radius: 14px;
+  padding: 36px 32px;
 }
 
 .login-brand {

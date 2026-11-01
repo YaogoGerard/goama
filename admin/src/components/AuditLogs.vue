@@ -94,7 +94,9 @@ function formatDate(iso: string) {
     </div>
 
     <div class="privacy">
-      <span>✓</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--success); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round">
+        <path d="M4.5 12.5l5 5 10-11" />
+      </svg>
       <div>
         <strong>Historique protégé</strong>
         Les données sensibles et le contenu des conversations ne sont jamais affichés ici.

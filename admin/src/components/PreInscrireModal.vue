@@ -112,7 +112,10 @@ function copyCode() {
         </div>
 
         <div class="security-notice">
-          <span>🔒</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; width: 14px; height: 14px; fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round">
+            <rect x="5" y="10" width="14" height="10" rx="2" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+          </svg>
           <small>
             Le serveur ne conserve que l'empreinte SHA-256 de ce code.
             Il ne sera plus jamais réaffiché après la fermeture de cette fenêtre.
@@ -127,7 +130,6 @@ function copyCode() {
       <!-- Formulaire de saisie -->
       <form v-show="!result" @submit.prevent="submitPreInscription" class="modal-body">
         <div v-if="error" class="login-alert danger">
-          <span>⚠</span>
           <div>{{ error }}</div>
         </div>
 
@@ -221,8 +223,8 @@ function copyCode() {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 15, 18, 0.5);
+  backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
   z-index: 1000;
@@ -231,12 +233,12 @@ function copyCode() {
 
 .modal-dialog {
   width: 100%;
-  max-width: 580px;
+  max-width: 560px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
 }
 
 .modal-header {
