@@ -50,16 +50,19 @@ if (config.NODE_ENV === "production") {
   if (!/^[a-fA-F0-9]{64}$/.test(config.TOTP_ENCRYPTION_KEY)) {
     throw new Error("TOTP_ENCRYPTION_KEY doit être une clé hexadécimale dédiée de 32 octets en production.");
   }
-  if (config.CORS_ORIGIN === "true" || config.CORS_ORIGIN.split(",").some((origin) => !origin.trim().startsWith("https://"))) {
-    throw new Error("CORS_ORIGIN doit contenir uniquement des origines HTTPS explicites en production.");
+  // Exception standard : les boucles locales restent admises en HTTP pour
+  // une installation de démonstration sur la machine de l'exploitant.
+  const estBoucleLocale = (origin: string) => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin.trim());
+  if (config.CORS_ORIGIN === "true" || config.CORS_ORIGIN.split(",").some((origin) => !origin.trim().startsWith("https://") && !estBoucleLocale(origin))) {
+    throw new Error("CORS_ORIGIN doit contenir uniquement des origines HTTPS explicites en production (boucles locales http://localhost admises).");
   }
   for (const [name, value] of Object.entries({
     PUBLIC_WEB_URL: config.PUBLIC_WEB_URL,
     PUBLIC_ADMIN_URL: config.PUBLIC_ADMIN_URL,
     PUBLIC_API_URL: config.PUBLIC_API_URL,
   })) {
-    if (!value.startsWith("https://")) {
-      throw new Error(`${name} doit utiliser HTTPS en production.`);
+    if (!value.startsWith("https://") && !estBoucleLocale(value)) {
+      throw new Error(`${name} doit utiliser HTTPS en production (boucles locales http://localhost admises).`);
     }
   }
 }
