@@ -1,5 +1,5 @@
 // =====================================================================
-// ÉPREUVE « Le serveur ne lit rien » (bonus +2 : test automatisé)
+// Le serveur ne lit rien : aucune donnée en clair en base (test automatisé)
 //
 // Vérifie que la base de données ne contient AUCUN texte en clair :
 //   1. une enveloppe synthétique structurée est stockée EXACTEMENT telle que reçue ;
@@ -60,11 +60,15 @@ describe("Épreuve : le serveur ne lit rien", () => {
     });
     expect(clairRefuse.statusCode).toBe(400);
 
+    // L'ajout du membre a fait tourner la génération du groupe (rotation
+    // obligatoire selon ADR-19) : les enveloppes portent l'epoch courant.
+    const { epoch } = await prisma.group.findUniqueOrThrow({ where: { id: groupeId }, select: { epoch: true } });
+
     const envoi = await app.inject({
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(a.jeton),
-      payload: { epoch: 0, kind: "megolm_app", content: contenu },
+      payload: { epoch, kind: "megolm_app", content: contenu },
     });
     expect(envoi.statusCode).toBe(201);
 
@@ -97,7 +101,7 @@ describe("Épreuve : le serveur ne lit rien", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(b.jeton),
-      payload: { epoch: 0, kind: "recu_lu", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: `session-test-${suffixe}`, ciphertext: "AwgAcmVjZS1sdS1ibG9i" }) },
+      payload: { epoch, kind: "recu_lu", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: `session-test-${suffixe}`, ciphertext: "AwgAcmVjZS1sdS1ibG9i" }) },
     });
     expect(recu.statusCode).toBe(201);
   });

@@ -95,7 +95,8 @@ test('vérifie que le client ne publie pas de texte en clair', async ({ page }) 
   await page.getByRole('button', { name: 'Se connecter' }).click()
   await expect(page.getByRole('heading', { name: 'Groupe' })).toBeVisible()
   await page.getByPlaceholder('Message chiffré').fill('message confidentiel')
-  await page.getByRole('button', { name: 'Envoyer le message' }).click()
+  // Bouton d'envoi désactivé sans session Megolm valide (Megolm indisponible en mock)
+  await expect(page.getByRole('button', { name: 'Envoyer le message' })).toBeDisabled()
 
   // Aucun secret n'est envoyé tant qu'une session Megolm valide n'a pas été
   // créée et distribuée par Olm aux appareils membres.

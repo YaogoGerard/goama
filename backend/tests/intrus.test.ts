@@ -1,5 +1,5 @@
 // =====================================================================
-// ÉPREUVE « Intrus » (bonus +2 : test automatisé)
+// Comportement anti-intrusion : énumération, anti-rejeu (test automatisé)
 //
 // Un compte non enrôlé est rejeté à CHAQUE porte, et les réponses ne
 // permettent pas de sonder les comptes existants (anti-énumération) :

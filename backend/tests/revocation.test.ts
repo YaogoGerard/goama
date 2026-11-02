@@ -1,5 +1,5 @@
 // =====================================================================
-// ÉPREUVE « Révocation » (bonus +2 : test automatisé)
+// Révocation immédiate (test automatisé)
 //
 // Un agent révoqué par l'Administrateur :
 //   1. perd immédiatement l'accès (ancien jeton → 401) ;

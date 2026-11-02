@@ -1,5 +1,5 @@
 // =====================================================================
-// ÉPREUVE « Parrainage et verrouillage »
+// Parrainage et verrouillage du compte
 //
 // 1. REQ-AUTHZ-005 (P0) : seul un agent dont le poste habilite le
 //    parrainage peut créer un groupe directement.
@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { construireApp } from "../src/app.js";
+import { prisma } from "../src/plugins/db.js";
 import { creerAgentActif, creerParrain, entete, jetonAdmin, suffixeUnique } from "./communs.js";
 
 let app: FastifyInstance;
@@ -70,11 +71,14 @@ describe("REQ-AUTHZ-005 : parrainage par poste officiel", () => {
     expect(ajout.statusCode).toBe(201);
 
     // Le membre peut envoyer un message
+    // L'ajout du membre a fait tourner la génération du groupe : enveloppe
+    // sur l'epoch courant du groupe.
+    const { epoch } = await prisma.group.findUniqueOrThrow({ where: { id: groupeId }, select: { epoch: true } });
     const msg = await app.inject({
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(membre.jeton),
-      payload: { epoch: 0, kind: "megolm_app", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: "session-verrou-test", ciphertext: "AwgAdGVzdC1ibG9i" }) },
+      payload: { epoch, kind: "megolm_app", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: "session-verrou-test", ciphertext: "AwgAdGVzdC1ibG9i" }) },
     });
     expect(msg.statusCode).toBe(201);
   });
