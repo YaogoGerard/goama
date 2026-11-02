@@ -35,7 +35,7 @@ async function makePage(label, browser) {
   const page = await context.newPage();
   const errors = [];
   page.on("console", (message) => {
-    if (message.type() === "error" && !message.text().includes("/api/auth/refresh")) errors.push(`${label}:console:${message.text()}`);
+    if ((message.type() === "error" || message.type() === "warning") && !message.text().includes("/api/auth/refresh")) errors.push(`${label}:console:${message.text()}`);
   });
   page.on("pageerror", (error) => errors.push(`${label}:page:${error.message}`));
   page.on("requestfailed", (request) => {
@@ -70,17 +70,19 @@ async function waitGroupReady(page) {
 }
 
 async function selectGroupById(page, groupId) {
-  const groupsResponse = page.waitForResponse((response) => {
-    return response.request().method() === "GET" && new URL(response.url()).pathname === "/api/groupes";
-  });
   await page.reload({ waitUntil: "domcontentloaded" });
-  const groups = await (await groupsResponse).json();
-  const targetIndex = groups.findIndex((group) => group.id === groupId);
-  if (targetIndex < 0) throw new Error(`Groupe ${groupId} absent de l’interface`);
   await page.getByLabel("Mes groupes").click();
-  const cards = page.locator("button.group-card");
-  await cards.nth(targetIndex).waitFor({ timeout: 20000 });
-  await cards.nth(targetIndex).click();
+  const card = page.locator(`button.group-card[data-group-id="${groupId}"]`);
+  await card.waitFor({ timeout: 20000 });
+  await page.locator('main.chat-area[data-selected-chat-id]:not([data-selected-chat-id=""])').waitFor({ timeout: 20000 });
+  console.log(`SELECT_GROUP ${groupId} cards=${await page.locator("button.group-card").count()}`);
+  await card.click();
+  try {
+    await page.locator(`main.chat-area[data-selected-chat-id="${groupId}"]`).waitFor({ timeout: 20000 });
+  } catch (error) {
+    const selected = await page.locator("main.chat-area").getAttribute("data-selected-chat-id").catch(() => null);
+    throw new Error(`groupe_non_selectionne attendu=${groupId} obtenu=${selected ?? "absent"}: ${error instanceof Error ? error.message : String(error)}`);
+  }
   await waitGroupReady(page);
 }
 
@@ -102,7 +104,12 @@ async function downloadAndCheck(page, filename, expected) {
   }
 }
 
-const browser = await chromium.launch({ headless: false, slowMo: 70 });
+const browser = await chromium.launch({
+  headless: false,
+  slowMo: 70,
+  executablePath: process.env.GOAMA_CHROME_PATH ?? "/usr/bin/google-chrome-stable",
+  args: ["--no-sandbox"],
+});
 const pages = {};
 const keepOpenMs = Number(process.env.KEEP_OPEN_MS ?? 180000);
 
@@ -181,6 +188,7 @@ try {
   await pages.a.page.getByRole("button", { name: "Créer le groupe" }).click();
   const createdGroup = await (await createdGroupResponse).json();
   const createdGroupId = createdGroup.id;
+  await pages.a.page.locator(`main.chat-area[data-selected-chat-id="${createdGroupId}"]`).waitFor({ timeout: 20000 });
   await waitGroupReady(pages.a.page);
   console.log("PASS création live du groupe à trois niveaux");
 

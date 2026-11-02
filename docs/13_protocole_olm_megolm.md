@@ -49,21 +49,21 @@ Les signatures prouvent que les clés publiques et les pré-clés ont été sign
 ## 6. Limites et critères avant usage réel
 
 - Le code utilise `@matrix-org/olm` 3.2.15 (libolm), bibliothèque dépréciée par Matrix. Matrix recommande `@matrix-org/matrix-sdk-crypto-wasm`, binding WASM de sa machine à états E2EE basée sur Vodozemac ; cette pile n'est pas intégrée.
-- Le chemin d'échange Olm/Megolm est maintenant raccordé dans le code, mais il n'a pas pu être exécuté entre deux navigateurs indépendants dans l'environnement de préparation : le registre npm était inaccessible.
-- Aucun test cryptographique de bout en bout, test de pénétration ou audit indépendant n'est déclaré réussi.
-- Il n'existe pas encore d'accusé de réception cryptographique explicite pour chaque destinataire. La persistance serveur et le rattrapage par séquence assurent le transport différé, mais ne prouvent pas qu'un membre a effectivement importé la clé.
+- Le chemin d'échange Olm/Megolm est raccordé dans le code et a été exécuté en local entre trois contextes Chromium indépendants : création du groupe, messages dans les deux sens, transfert de fichiers et téléchargement ont réussi sans erreur navigateur.
+- Cette validation ne remplace ni un test cryptographique adversarial, ni un test de pénétration, ni une revue indépendante.
+- Le serveur enregistre désormais un accusé par couple émetteur/destinataire et par epoch après import local et vérification du `session_id`. Cet accusé atteste le comportement déclaré par le client authentifié, mais ne constitue pas une preuve indépendante de l'exécution du navigateur.
 - La récupération automatique après perte de l'IndexedDB, remplacement de navigateur ou corruption d'une session Olm n'est pas implémentée. Le changement d'identité est bloqué par TOFU et demande une procédure de ré-enrôlement/vérification.
 - Les pré-clés sont renouvelées au démarrage lorsque le stock serveur devient faible ; le réapprovisionnement en continu pendant une session longue n'est pas encore piloté par un accusé de consommation.
 - Une enveloppe Olm sortante restée en attente d'un ancien `epoch` après un changement de membres nécessite une procédure de reprise contrôlée ; elle n'est pas automatiquement réinitialisée.
 
-**Conclusion :** cette intégration corrige le blocage structurel du partage de clés, mais elle n'est pas certifiée ni démontrée en exécution. Goama reste un prototype de démonstration et ne doit pas traiter de données administratives réelles avant les tests multi-agents, la vérification hors bande des identités, la migration vers la pile WASM officielle Matrix (`@matrix-org/matrix-sdk-crypto-wasm` / Vodozemac) et une revue cryptographique indépendante.
+**Conclusion :** l'intégration est démontrée en local mais n'est pas certifiée. Goama ne doit pas traiter de données administratives réelles avant la vérification hors bande des identités, les tests adversariaux et de panne, la décision institutionnelle sur la migration vers la pile WASM officielle Matrix (`@matrix-org/matrix-sdk-crypto-wasm` / Vodozemac), une restauration complète validée et une revue cryptographique indépendante.
 
 ## 7. Scénario minimal de validation
 
-1. Connecter deux agents fictifs sur deux navigateurs distincts ; vérifier que chacun publie son identité et ses pré-clés signées.
-2. Créer un groupe et vérifier que chaque agent reçoit le partage Olm destiné à sa clé Curve25519.
-3. Envoyer un message dans chaque sens et vérifier le déchiffrement Megolm.
-4. Inspecter PostgreSQL et le trafic API : aucune clé Megolm ni aucun texte clair ne doit apparaître.
-5. Ajouter un troisième agent, vérifier la nouvelle génération et la distribution aux membres actifs.
-6. Retirer le troisième agent, vérifier qu'il ne reçoit pas les nouvelles clés et ne peut pas déchiffrer les messages postérieurs à la rotation.
-7. Rejouer une enveloppe de partage et vérifier son rejet.
+1. Connecter trois agents fictifs sur trois contextes Chromium distincts ; vérifier les identités et pré-clés signées. **Validé en local.**
+2. Créer un groupe et vérifier que chaque agent reçoit le partage Olm destiné à sa clé Curve25519. **Validé en local par les accusés d'epoch.**
+3. Envoyer des messages dans plusieurs sens et vérifier le déchiffrement Megolm. **Validé en local.**
+4. Transférer un fichier dans les deux sens et vérifier le téléchargement après déchiffrement local. **Validé en local.**
+5. Inspecter PostgreSQL et le trafic API : aucune clé Megolm ni aucun texte clair ne doit apparaître. **Contrat serveur validé ; inspection réseau institutionnelle à compléter.**
+6. Retirer un membre, vérifier la nouvelle génération et l'impossibilité pour l'ancien membre de déchiffrer les messages postérieurs. **Test adversarial restant.**
+7. Rejouer une enveloppe de partage, simuler un membre hors ligne et provoquer une partition réseau. **Tests d'intégration restants.**

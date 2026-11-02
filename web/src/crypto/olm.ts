@@ -315,6 +315,16 @@ export const olmService = {
     } finally { db.close() }
   },
 
+  /** Empreinte courte à comparer par un canal institutionnel hors bande. */
+  async fingerprint(bundle: OlmDeviceBundle): Promise<string> {
+    validateIdentity(bundle)
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      'SHA-256',
+      encoder.encode(canonicalJson(bundle.deviceKeys)),
+    ))
+    return Array.from(digest).map((byte) => byte.toString(16).padStart(2, '0')).join('').match(/.{1,4}/g)?.join(' ') ?? ''
+  },
+
   async hasSession(agentId: string, remoteCurve25519: string): Promise<boolean> {
     const db = await openDb()
     try {

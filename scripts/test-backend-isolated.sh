@@ -51,6 +51,8 @@ export GROUP_REQUEST_ENCRYPTION_KEY="$(printf 'b%.0s' {1..64})"
 export LOGIN_RATE_MAX=1000
 export GLOBAL_RATE_MAX=10000
 export WS_AUTH_TIMEOUT_MS=2000
+export MEDIA_MAX_BYTES_PER_GROUP=1048576
+export MEDIA_MAX_BYTES_PER_AGENT=524288
 
 echo "Migrations PostgreSQL de test..."
 npx prisma migrate deploy

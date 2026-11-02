@@ -2,7 +2,7 @@
 
 **Statut : logiciel en développement, non certifié pour un déploiement institutionnel.** Les contrôles d'identité et d'autorisation côté serveur sont présents et renforcés (sessions uniques vérifiées à chaque requête, TOTP chiffré au repos, WebSockets contrôlant l'origine et la charge). Le modèle est strictement mono-appareil : un appareil actif par agent.
 
-Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm, enveloppes individuelles, import des clés Megolm) est implémenté côté client et backend. Le modèle de confiance TOFU ne remplace pas une vérification hors bande des empreintes, qui reste à construire. En conséquence, Goama ne doit pas être utilisée avec des données administratives réelles tant que la validation de bout en bout et une revue indépendante n'ont pas été effectuées.
+Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm, enveloppes individuelles, import des clés Megolm et accusés par epoch) est implémenté côté client et backend. Il a été validé en local entre trois contextes Chromium indépendants, avec messages et fichiers. Le modèle de confiance TOFU ne remplace pas une vérification hors bande des empreintes, qui reste à construire. En conséquence, Goama ne doit pas être utilisée avec des données administratives réelles tant que les tests adversariaux, la restauration complète et la revue indépendante n'ont pas été effectués.
 
 ## Règles de déploiement
 

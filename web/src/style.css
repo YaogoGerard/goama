@@ -172,6 +172,7 @@ body,
   .members-panel-heading button { @apply border-0 bg-transparent text-lg leading-none text-[#655d50]; }
   .members-message { @apply m-0 text-xs text-[#655d50]; }
   .member-row { @apply flex items-center justify-between gap-3 rounded-xl border border-[#eee8dc] bg-[#f7f4ed] px-3 py-2.5; }
+  .member-fingerprint { @apply mt-1 block break-all font-mono text-[10px] font-normal leading-4 text-[#756c5e]; }
   .member-name { @apply min-w-0 truncate text-sm font-medium text-[#211d16]; }
   .member-name em { @apply mr-2 font-normal not-italic text-xs text-[#918a7d]; }
   .member-remove { @apply size-7 shrink-0 place-items-center rounded-lg border border-[#ded5c4] bg-[#fffefa] text-sm leading-none text-[#b52d2d] transition hover:border-[#e7b5b5] hover:bg-[#fff0f0]; }

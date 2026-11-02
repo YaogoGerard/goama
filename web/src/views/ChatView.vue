@@ -119,7 +119,7 @@ let chatViewMounted = false
 const membersOpen = ref(false)
 const membersMessage = ref('')
 const memberToAdd = ref('')
-const groupMembersMap = ref<Record<string, { id: string; role: string; name: string; ministere: string }[]>>({})
+const groupMembersMap = ref<Record<string, { id: string; role: string; name: string; ministere: string; empreinte?: string }[]>>({})
 
 // Appareils enregistrés (profil)
 const deviceList = ref<Device[]>([])
@@ -702,15 +702,29 @@ const loadGroupRequests = async () => {
   // /groupes/:id/membres) -----------------------------------------------
 const loadGroupMembers = async (groupId: string) => {
     try {
-      groupMembersMap.value[groupId] = (await api.groupMembers(groupId)).map((member) => {
+      const [members, bundles] = await Promise.all([api.groupMembers(groupId), api.groupOlmKeys(groupId, [])])
+      const bundleByAgent = new Map(bundles
+        .filter((bundle): bundle is typeof bundle & { deviceKeys: NonNullable<typeof bundle.deviceKeys>; deviceSignature: string } => Boolean(bundle.deviceKeys && bundle.deviceSignature))
+        .map((bundle) => [bundle.agentId, bundle]))
+      groupMembersMap.value[groupId] = await Promise.all(members.map(async (member) => {
         const agent = agentsListRaw.value.find((item) => item.id === member.agentId)
+        const bundle = bundleByAgent.get(member.agentId)
+        let empreinte: string | undefined
+        if (bundle) {
+          try {
+            empreinte = await olmService.fingerprint({ agentId: bundle.agentId, deviceKeys: bundle.deviceKeys, deviceSignature: bundle.deviceSignature })
+          } catch {
+            empreinte = undefined
+          }
+        }
         return {
           id: member.agentId,
           role: member.role,
           name: agent?.name ?? 'Agent',
-          ministere: agent?.ministry ?? ''
+          ministere: agent?.ministry ?? '',
+          empreinte
         }
-      })
+      }))
     } catch {
       /* le groupe n'est plus visible : rien à afficher */
     }
@@ -1378,6 +1392,7 @@ onBeforeUnmount(() => {
         <button
           v-for="group in conversationsRaw.filter((conversation) => conversation.isGroup)"
           :key="group.id"
+          :data-group-id="group.id"
           type="button"
           class="conversation-card group-card"
           @click="openGroup(group)"
@@ -1460,7 +1475,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <main class="chat-area" :class="{ 'show-mobile': showMobileChat }">
+    <main class="chat-area" :class="{ 'show-mobile': showMobileChat }" :data-selected-chat-id="selectedChat?.id ?? ''">
       <template v-if="selectedChat">
         <header class="chat-header">
           <div class="header-left">
@@ -1506,7 +1521,7 @@ onBeforeUnmount(() => {
           </div>
           <p v-if="membersMessage" class="members-message" role="status">{{ membersMessage }}</p>
           <div v-for="member in groupMembersMap[selectedChat.id] || []" :key="member.id" class="member-row">
-            <span class="member-name"><em>{{ member.role }}</em>{{ member.name }}</span>
+            <span class="member-name"><em>{{ member.role }}</em>{{ member.name }}<small v-if="member.empreinte" class="member-fingerprint">Empreinte à comparer : {{ member.empreinte }}</small><small v-else class="member-fingerprint">Empreinte indisponible</small></span>
             <button
               v-if="selectedChat.monRole === 'PARRAIN' && member.id !== meId"
               type="button"
