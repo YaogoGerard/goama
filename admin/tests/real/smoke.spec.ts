@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { test, expect, type Page } from "@playwright/test";
 import { totp } from "./totp.js";
 
@@ -7,23 +6,11 @@ import { totp } from "./totp.js";
 // Aucune brique n'est simulée. Données de démonstration uniquement.
 // ============================================================
 
-let secretTotp = "";
-
-test.beforeAll(() => {
-  // Le secret TOTP réel est généré par src/bootstrap-admin.ts au
-  // démarrage du conteneur. On le lit à la source (la base), comme un
-  // exploitant provisionnerait son administrateur.
-  secretTotp = execSync(
-    `docker compose -f "${process.env.COMPOSE_DIR ?? process.cwd() + "/.."}/docker-compose.yml"` +
-      ` exec -T db psql -U goama -d goama -t -A -c 'SELECT "totpSecret" FROM "Agent" WHERE matricule = '"'"'ADMIN001'"'"';'`,
-    { encoding: "utf8" },
-  ).trim();
-  if (!secretTotp) throw new Error("ADMIN001 absent de la base : lancez la stack Docker.");
-});
+let secretTotp = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"; // compte ADMIN001, backend/DEMO_ACCOUNTS.md
 
 const CREDS = {
   matricule: "ADMIN001",
-  motDePasse: "AdminGoama2026!",
+  motDePasse: "GoamaAdmin2026!",
 };
 
 async function seConnecter(page: Page) {

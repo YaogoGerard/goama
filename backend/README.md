@@ -29,7 +29,7 @@ npm run build
 npm test                   # vitest, base PostgreSQL requise
 ```
 
-À la racine du dépôt, `./setup.sh` génère `backend/.env` automatiquement (secrets PostgreSQL, `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, compte administrateur initial) et lance la stack complète via Docker Compose.
+À la racine du dépôt, `docker compose up` construit la stack en mode production, applique les migrations et provisionne automatiquement les comptes d'amorçage (1 administrateur + 3 agents de démonstration ; voir `DEMO_ACCOUNTS.md`). Les secrets applicatifs sont générés au premier démarrage de l'API et persistés dans un volume Docker ; aucun fichier `.env` n'est requis pour la stack. Le fichier `.env.example` sert uniquement au développement local sans Docker.
 
 Descriptions des variables dans `.env.example` ; les secrets sont exclus du dépôt et chiffrés au repos lorsque le serveur en détient (`TOTP_ENCRYPTION_KEY`).
 

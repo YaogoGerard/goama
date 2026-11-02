@@ -1,7 +1,7 @@
 #!/bin/sh
 # Vérifications avant livraison d'une archive projet Goama.
 set -eu
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 errors=0
 
 # Aucun environnement local ni artefact de build ne doit entrer dans l'archive.
@@ -17,13 +17,9 @@ if [ ! -f "$ROOT/backend/.env.example" ]; then
   echo "ERREUR: backend/.env.example absent." >&2
   errors=1
 fi
-if [ ! -f "$ROOT/backend/.env" ]; then
-  echo "ERREUR: backend/.env absent (généré par ./setup.sh)." >&2
-  errors=1
-fi
 
 # Documents de référence du dépôt.
-for required in LICENSE README.md docs/NOTE_SECURITE.md docs/TECHNOLOGIES_LICENCES.md docs/13_protocole_olm_megolm.md backend/README.md; do
+for required in LICENSE README.md backend/DEMO_ACCOUNTS.md docs/NOTE_SECURITE.md docs/TECHNOLOGIES_LICENCES.md docs/13_protocole_olm_megolm.md backend/README.md; do
   if [ ! -f "$ROOT/$required" ]; then
     echo "ERREUR: document absent: $required" >&2
     errors=1

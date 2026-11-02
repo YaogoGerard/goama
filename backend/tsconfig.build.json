@@ -1,5 +1,5 @@
-// Build de production : compile UNIQUEMENT src/ vers dist/
-// (seed/ et scripts/ sont exécutés via tsx, pas besoin de les compiler).
+// Build de production : compile src/ vers dist/ (l'amorçage des comptes est
+// compilé ; les scripts d'exploitation shells vivent dans scripts/).
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {

@@ -43,23 +43,31 @@ Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly 
 - **Données :** PostgreSQL 17 ; stockage d'enveloppes opaques (aucun clair en base).
 - **Déploiement :** Docker Compose, Nginx en terminaison statique et proxy `/api`.
 
-## Installation locale
+## Installation en une commande
 
-Prérequis : Git, Docker Engine avec Docker Compose, et OpenSSL.
+Prérequis : Docker Engine avec Docker Compose v2. Aucun autre outil ni fichier de configuration n'est nécessaire.
 
 ```bash
 git clone https://github.com/YaogoGerard/goama.git
 cd goama
-./setup.sh
+docker compose up
 ```
 
-Le script demande le matricule et le mot de passe de l'administrateur initial, génère des secrets locaux (PostgreSQL, `JWT_SECRET`, clé dédiée de chiffrement des secrets TOTP), lance les services et applique les migrations. Les fichiers `.env` ne sont jamais committés et sont créés avec des permissions restrictives. Les ports applicatifs sont liés en `127.0.0.1` par défaut ; PostgreSQL n'est pas publié sur l'hôte.
+Au premier lancement, `docker compose up` :
 
-- Messagerie agent : http://localhost:3000
-- Administration : http://localhost:5173
-- API : http://localhost:8080 (`/healthz`)
+1. construit toutes les images **en mode production** (builds minifiés, `NODE_ENV=production`) ;
+2. applique les migrations PostgreSQL ;
+3. provisionne automatiquement **1 administrateur et 3 agents de démonstration** — deux habilités au parrainage de groupes (Chef de Service, Directeur Central), un non habilité (Chargé d'Études) — et affiche leurs mot de passe et secret TOTP dans les journaux : `docker compose logs api`. Identifiants détaillés dans `backend/DEMO_ACCOUNTS.md`.
 
-Le secret TOTP de l'administrateur initial est affiché dans les journaux : `docker compose logs api`. Comptes et données de démonstration sont strictement fictifs.
+Les fichiers `.env` ne sont pas requis : les secrets applicatifs (JWT, clé de chiffrement TOTP) sont générés au premier démarrage de l'API et persistés dans un volume Docker. Les donnés de démonstration sont strictement fictives ; les ports applicatifs sont liés en `127.0.0.1` par défaut et PostgreSQL n'est pas publié sur l'hôte. Ports et URL publiques restent surchargeables via un `.env` optionnel.
+
+| Service | URL |
+|---|---|
+| Messagerie agent | http://localhost:3000 |
+| Administration | http://localhost:5173 |
+| API | http://localhost:8080 (`/healthz`) |
+
+Arrêt de la stack : `docker compose down` (données conservées ; un nouvel `docker compose up` relance tout sans perte). Réinitialisation complète : `docker compose down -v` puis `docker compose up`.
 
 ## Vérification
 

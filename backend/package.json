@@ -14,9 +14,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx seed/seed.ts",
-    "bootstrap:admin": "tsx src/bootstrap-admin.ts",
-    "demo": "tsx scripts/demo-flux-api.ts",
+
     "postinstall": "prisma generate"
   },
   "keywords": [],
