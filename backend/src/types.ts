@@ -21,6 +21,7 @@ export type PayloadJeton = {
   sub: string; // id de l'agent
   jti: string; // id de la session : la clé de la révocation immédiate
   role: RoleApp;
+  tokenType: "access";
 };
 
 declare module "fastify" {

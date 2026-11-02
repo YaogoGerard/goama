@@ -19,6 +19,8 @@ import { relais } from "./relay.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { KINDS } from "./schemas.js";
 import { estHabiliteParrain } from "../lib/parrainage.js";
+import { chiffrerDonneeDemande, dechiffrerDonneeDemande } from "../lib/group-request-crypto.js";
+import { planifierRotation } from "./rotation.js";
 
 // Vérifie que l'agent est membre ACTIF du groupe, sinon 403 (épreuve Intrus)
 async function exigerMembre(groupeId: string, agentId: string) {
@@ -91,8 +93,8 @@ export async function demanderGroupe(
     data: {
       demandeurId,
       parrainId,
-      nomRequest: details?.nom?.trim() || null,
-      membresRequest: membres,
+      nomRequest: details?.nom?.trim() ? chiffrerDonneeDemande(details.nom.trim()) : null,
+      membresRequest: membres.map(chiffrerDonneeDemande),
     },
   });
   await journaliser(demandeurId, "demande_creation_groupe", demande.id);
@@ -118,8 +120,8 @@ export async function listerDemandesGroupe(agentId: string) {
     estDemandeur: demande.demandeurId === agentId,
     demandeur: demande.demandeur,
     parrain: demande.parrain,
-    nomRequest: demande.nomRequest,
-    membresRequest: demande.membresRequest,
+    nomRequest: demande.nomRequest ? dechiffrerDonneeDemande(demande.nomRequest) : null,
+    membresRequest: demande.membresRequest.map(dechiffrerDonneeDemande),
   }));
 }
 
@@ -135,11 +137,14 @@ export async function approuverDemandeGroupe(demandeId: string, parrainId: strin
   }
   if (!demandeur || demandeur.statut !== "ACTIF") throw new ErreurApi(400, "agent_non_actif");
 
+  const nomRequest = demande.nomRequest ? dechiffrerDonneeDemande(demande.nomRequest) : null;
+  const membresRequest = demande.membresRequest.map(dechiffrerDonneeDemande);
+
   const resultat = await prisma.$transaction(async (tx) => {
     const groupe = await tx.group.create({ data: { createdBy: demande.demandeurId } });
     // Le demandeur et le parrain signataire sont tous deux PARRAINS du
     // nouveau groupe ; les membres choisis dans l'assistant arrivent en MEMBRE.
-    const idsMembres = [...new Set(demande.membresRequest)].filter(
+    const idsMembres = [...new Set(membresRequest)].filter(
       (id) => id !== demande.demandeurId && id !== parrainId,
     );
     await tx.groupMember.createMany({
@@ -151,12 +156,12 @@ export async function approuverDemandeGroupe(demandeId: string, parrainId: strin
     });
     await tx.groupRequest.update({
       where: { id: demandeId },
-      data: { statut: "APPROUVEE", groupeId: groupe.id, decidedAt: new Date() },
+      data: { statut: "APPROUVEE", groupeId: groupe.id, decidedAt: new Date(), nomRequest: null, membresRequest: [] },
     });
     return groupe;
   });
   await journaliser(parrainId, "approbation_demande_groupe", demandeId);
-  return { id: resultat.id, epoch: resultat.epoch, nomRequest: demande.nomRequest, membresRequest: demande.membresRequest };
+  return { id: resultat.id, epoch: resultat.epoch, nomRequest, membresRequest };
 }
 
 export async function rejeterDemandeGroupe(demandeId: string, parrainId: string) {
@@ -165,7 +170,7 @@ export async function rejeterDemandeGroupe(demandeId: string, parrainId: string)
   if (demande.statut !== "EN_ATTENTE") throw new ErreurApi(409, "demande_deja_traitee");
   await prisma.groupRequest.update({
     where: { id: demandeId },
-    data: { statut: "REJETEE", decidedAt: new Date() },
+    data: { statut: "REJETEE", decidedAt: new Date(), nomRequest: null, membresRequest: [] },
   });
   await journaliser(parrainId, "rejet_demande_groupe", demandeId);
   return { ok: true };
@@ -204,6 +209,7 @@ export async function ajouterMembre(groupeId: string, cibleId: string, demandeur
   if (!cible || cible.statut !== "ACTIF") throw new ErreurApi(400, "agent_non_enrole");
 
   const resultat = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupeId} FOR UPDATE`;
     const existant = await tx.groupMember.findUnique({
       where: { groupeId_agentId: { groupeId, agentId: cibleId } },
     });
@@ -220,7 +226,8 @@ export async function ajouterMembre(groupeId: string, cibleId: string, demandeur
       await tx.groupMember.create({ data: { groupeId, agentId: cibleId, role: "MEMBRE" } });
     }
     const groupe = await tx.group.update({ where: { id: groupeId }, data: { epoch: { increment: 1 } }, select: { epoch: true } });
-    return { epoch: groupe.epoch, changed: true };
+    const rotation = await planifierRotation(tx, groupeId, cibleId, groupe.epoch);
+    return { epoch: groupe.epoch, changed: true, rotation };
   });
   await journaliser(demandeur, "ajout_membre", groupeId);
 
@@ -237,6 +244,7 @@ export async function ajouterMembre(groupeId: string, cibleId: string, demandeur
 export async function retirerMembre(groupeId: string, cibleId: string, demandeur: string) {
   await exigerParrain(groupeId, demandeur);
   const resultat = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupeId} FOR UPDATE`;
     const membre = await tx.groupMember.findUnique({ where: { groupeId_agentId: { groupeId, agentId: cibleId } } });
     if (!membre || membre.removedAt !== null) throw new ErreurApi(404, "membre_introuvable");
     await tx.groupMember.update({
@@ -244,18 +252,14 @@ export async function retirerMembre(groupeId: string, cibleId: string, demandeur
       data: { removedAt: new Date() },
     });
     const groupe = await tx.group.update({ where: { id: groupeId }, data: { epoch: { increment: 1 } }, select: { epoch: true } });
-    await tx.retraitCryptographique.upsert({
-      where: { groupeId_agentId: { groupeId, agentId: cibleId } },
-      update: { statut: "EN_ATTENTE", erreur: null },
-      create: { groupeId, agentId: cibleId, statut: "EN_ATTENTE" },
-    });
-    return { epoch: groupe.epoch };
+    const rotation = await planifierRotation(tx, groupeId, cibleId, groupe.epoch);
+    return { epoch: groupe.epoch, statut: rotation.statut };
   });
   await journaliser(demandeur, "retrait_membre", groupeId);
 
   const tous = await prisma.groupMember.findMany({ where: { groupeId, removedAt: null }, select: { agentId: true } });
   relais.versGroupe(tous.map((m) => m.agentId), { type: "membre_retire", groupeId, agentId: cibleId, epoch: resultat.epoch });
-  return { ok: true, epoch: resultat.epoch, rotationCryptographique: "EN_ATTENTE" as const };
+  return { ok: true, epoch: resultat.epoch, rotationCryptographique: resultat.statut };
 }
 
 // ---- Messages ----------------------------------------------------------
@@ -311,7 +315,6 @@ export async function posterMessage(
       seq: message.seq,
       epoch: message.epoch,
       kind: message.kind,
-      content: message.content,
       de: demandeur.id,
     },
   );

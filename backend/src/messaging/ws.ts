@@ -52,7 +52,12 @@ export function enregistrerPasserelleWs(app: FastifyInstance) {
         if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now() ||
             session.agentId !== agentId || !agent || agent.statut !== "ACTIF") {
           ws.close(4001, "session_fermee");
+          return;
         }
+        // Uniquement l'instance propriétaire peut rafraîchir la présence.
+        // Si une nouvelle socket a pris la place sur un autre nœud, on ferme
+        // cette ancienne connexion même si la notification inter-instance a été perdue.
+        if (!await relais.actualiserPresence(agentId, sessionId)) ws.close(4001, "session_remplacee");
       } catch {
         // Si la base est indisponible, ne pas maintenir une socket privilégiée.
         if (ws.readyState === ws.OPEN) ws.close(1011, "verification_indisponible");
@@ -82,6 +87,7 @@ export function enregistrerPasserelleWs(app: FastifyInstance) {
         }
         try {
           const payload = app.jwt.verify(msg.jeton) as PayloadJeton;
+          if (payload.tokenType !== "access") return ws.close(4001, "jeton_invalide");
           const [agent, session] = await Promise.all([
             prisma.agent.findUnique({ where: { id: payload.sub } }),
             prisma.session.findUnique({ where: { id: payload.jti } }),
@@ -93,7 +99,7 @@ export function enregistrerPasserelleWs(app: FastifyInstance) {
 
           agentId = agent.id;
           sessionId = session.id;
-          relais.enregistrer(agentId, ws);
+          await relais.enregistrer(agentId, sessionId, ws);
           clearTimeout(minuteurAuth);
           ws.send(JSON.stringify({ type: "auth_ok" }));
         } catch {

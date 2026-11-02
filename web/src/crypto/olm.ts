@@ -26,9 +26,9 @@ interface OlmAccount {
 interface OlmSession {
   create_outbound(account: OlmAccount, identityKey: string, oneTimeKey: string): void
   create_inbound(account: OlmAccount, message: string): void
+  create_inbound_from(account: OlmAccount, identityKey: string, message: string): void
   encrypt(plaintext: string): { type: number; body: string }
   decrypt(type: number, body: string): string
-  remote_identity_key(): string
   session_id(): string
   pickle(key: string): string
   unpickle(key: string, pickle: string): void
@@ -333,10 +333,6 @@ export const olmService = {
       const db = await openDb()
       try {
       const existing = await loadSessions(db, agentId, remote.curve25519)
-      if (existing.some((item) => item.session.remote_identity_key() !== remote.curve25519)) {
-        existing.forEach(({ session }) => session.free())
-        throw new Error('olm_session_identite_incoherente')
-      }
       const wantedHash = await hashPlaintext(plaintext)
       const pendingItem = existing.find((item) => item.record.pendingEnvelopeIv && item.record.pendingEnvelopeCiphertext)
       if (pendingItem) {
@@ -403,7 +399,6 @@ export const olmService = {
 
       const existing = await loadSessions(db, agentId, senderCurve25519)
       for (const item of existing) {
-        if (item.session.remote_identity_key() !== senderCurve25519) continue
         try {
           const plaintext = item.session.decrypt(messageType, body)
           await saveSession(db, agentId, senderCurve25519, item.session)
@@ -421,8 +416,10 @@ export const olmService = {
       return await withAccount(agentId, async (account) => {
         const inbound = new olm.Session()
         try {
-          inbound.create_inbound(account, body)
-          if (inbound.remote_identity_key() !== senderCurve25519) throw new Error('olm_identite_expediteur_incoherente')
+          // La variante *_from lie explicitement le message pré-clé à
+          // l'identité annoncée et remplace remote_identity_key(), qui
+          // n'existe pas dans @matrix-org/olm 3.2.15.
+          inbound.create_inbound_from(account, senderCurve25519, body)
           const plaintext = inbound.decrypt(messageType, body)
           account.remove_one_time_keys(inbound)
           await saveSession(db, agentId, senderCurve25519, inbound)
