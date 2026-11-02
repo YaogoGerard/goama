@@ -9,8 +9,8 @@
 //   → le serveur n'a NI le contenu NI la clé. Épreuve « le serveur
 //     ne lit rien » : la table et le volume ne contiennent que du bruit.
 // =====================================================================
-import { createReadStream, existsSync } from "node:fs";
-import { mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { mkdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -21,6 +21,12 @@ import { config } from "../config.js";
 import { ErreurApi } from "../lib/erreurs.js";
 
 const TAILLE_MAX = 25 * 1024 * 1024; // 25 Mo (doc 06 §7)
+
+async function supprimerSiPresent(chemin: string) {
+  try { await unlink(chemin); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
 
 // Vérifie que l'agent est membre actif du groupe visé
 async function exigerMembre(groupeId: string, agentId: string) {
@@ -46,19 +52,55 @@ export function enregistrerRoutesMedia(app: FastifyInstance) {
 
     const id = randomUUID();
     const chemin = join(config.FILES_DIR, id);
-    mkdirSync(config.FILES_DIR, { recursive: true });
-    writeFileSync(chemin, blob); // le blob EST le fichier chiffré du client
+    const temporaire = join(config.FILES_DIR, `.upload-${id}.tmp`);
+    await mkdir(config.FILES_DIR, { recursive: true, mode: 0o700 });
+    await writeFile(temporaire, blob, { flag: "wx", mode: 0o600 });
 
-    const objet = await prisma.mediaObject.create({
-      data: {
-        id,
-        groupeId,
-        uploaderId: req.agent!.id,
-        taille: blob.length,
-        sha256: sha256(blob), // intégrité du blob chiffré (jamais de son contenu)
-        storagePath: chemin,
-      },
-    });
+    let fichierFinalise = false;
+    let objet;
+    try {
+      objet = await prisma.$transaction(async (tx) => {
+        // Verrous consultatifs pris dans le même ordre pour garantir les
+        // quotas malgré plusieurs téléversements simultanés.
+        // pg_advisory_xact_lock() retourne PostgreSQL `void`. Encapsuler son
+        // appel et ne sélectionner qu'une valeur scalaire évite que Prisma 7
+        // tente de désérialiser ce type non supporté.
+        await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('goama:media:group'), hashtext(${groupeId}))) AS advisory_lock`;
+        await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('goama:media:agent'), hashtext(${req.agent!.id}))) AS advisory_lock`;
+
+        const [groupe, agent] = await Promise.all([
+          tx.mediaObject.aggregate({ where: { groupeId }, _sum: { taille: true } }),
+          tx.mediaObject.aggregate({ where: { uploaderId: req.agent!.id }, _sum: { taille: true } }),
+        ]);
+        const totalGroupe = groupe._sum.taille ?? 0;
+        const totalAgent = agent._sum.taille ?? 0;
+        if (totalGroupe + blob.length > config.MEDIA_MAX_BYTES_PER_GROUP) {
+          throw new ErreurApi(413, "quota_stockage_groupe_depasse");
+        }
+        if (totalAgent + blob.length > config.MEDIA_MAX_BYTES_PER_AGENT) {
+          throw new ErreurApi(413, "quota_stockage_agent_depasse");
+        }
+
+        // Le fichier apparaît atomiquement avant la création de sa métadonnée.
+        // En cas d'échec de transaction, le catch externe le supprimera.
+        await rename(temporaire, chemin);
+        fichierFinalise = true;
+        return tx.mediaObject.create({
+          data: {
+            id,
+            groupeId,
+            uploaderId: req.agent!.id,
+            taille: blob.length,
+            sha256: sha256(blob),
+            storagePath: chemin,
+          },
+        });
+      });
+    } catch (error) {
+      await supprimerSiPresent(temporaire);
+      if (fichierFinalise) await supprimerSiPresent(chemin);
+      throw error;
+    }
     await journaliser(req.agent!.id, "depot_media", objet.id);
     return reply.code(201).send({ id: objet.id, taille: objet.taille, sha256: objet.sha256 });
   });
@@ -70,8 +112,12 @@ export function enregistrerRoutesMedia(app: FastifyInstance) {
     if (!objet) throw new ErreurApi(404, "media_introuvable");
     await exigerMembre(objet.groupeId, req.agent!.id);
 
-    if (!existsSync(objet.storagePath)) throw new ErreurApi(410, "media_disparu");
-    const taille = statSync(objet.storagePath).size;
+    let taille: number;
+    try { taille = (await stat(objet.storagePath)).size; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new ErreurApi(410, "media_disparu");
+      throw error;
+    }
     return reply
       .type("application/octet-stream")
       .header("content-length", taille)
@@ -86,8 +132,22 @@ export function enregistrerRoutesMedia(app: FastifyInstance) {
     if (objet.uploaderId !== req.agent!.id && req.agent!.role !== "ADMIN") {
       throw new ErreurApi(403, "droits_insuffisants");
     }
-    if (existsSync(objet.storagePath)) unlinkSync(objet.storagePath);
-    await prisma.mediaObject.delete({ where: { id } });
+    const quarantaine = join(config.FILES_DIR, `.delete-${id}.tmp`);
+    let deplace = false;
+    try {
+      await rename(objet.storagePath, quarantaine);
+      deplace = true;
+      await prisma.mediaObject.delete({ where: { id } });
+      deplace = false; // la suppression DB est validée ; un tombstone résiduel sera réconcilié par le job.
+      await supprimerSiPresent(quarantaine).catch(() => undefined);
+    } catch (error) {
+      if (deplace) {
+        try { await rename(quarantaine, objet.storagePath); }
+        catch { /* conserver l'erreur initiale ; le réconciliateur traitera l'orphelin */ }
+      }
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new ErreurApi(410, "media_disparu");
+      throw error;
+    }
     return { ok: true };
   });
 }

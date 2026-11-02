@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Base path | `/api/v1` |
-| Adapter | PostgreSQL (source de vérité), Redis (volatils), MinIO (blobs chiffrés) |
+| Adapter | PostgreSQL (source de vérité, présence et relais inter-instances via `LISTEN/NOTIFY`), stockage filesystem des blobs chiffrés |
 | Références | `02_requirements_srs.md` (exigences) · `03_design_contract_invariants.md` (garanties) · `09_data_model.md` (entités) |
 
 ---
@@ -29,13 +29,13 @@
 | Zone | Endpoints | Exigences |
 |---|---|---|
 | **Authentification** | `POST /auth/login` (identifiant + secret + TOTP), `POST /auth/logout`, `POST /auth/refresh`, `POST /auth/mfa/totp` (enregistrement), `DELETE /auth/mfa/totp` (désenregistrement), `POST /auth/mfa/reset-request` (demande adressée à l'Administrateur ; aucune régénération en libre-service) | REQ-ID-004, 005, 009 |
-| **Amorçage** | Provisionnement automatique de l'administrateur et des comptes de démonstration au premier démarrage du conteneur API (script d'amorçage interne, aucune route HTTP ; refusé si un Administrateur existe) | REQ-OPS-012 |
+| **Amorçage** | Provisionnement du seul administrateur initial à partir de `ADMIN_MATRICULE` et des secrets montés par Docker Secrets (aucun compte de démonstration, aucun secret journalisé ; idempotent si un administrateur existe) | REQ-OPS-012 |
 | **Appareils** | `POST /devices/enrollment-authorizations` (Administrateur ; génère le code, envoi e-mail, expiration 24 h), `POST /devices/enrollment-authorizations/{id}/resend` (annule et remplace le code), `POST /devices/enroll` (matricule + code + clé publique locale), `GET /devices`, `DELETE /devices/{id}` (révocation d'un appareil par l'Administrateur) | REQ-ID-001 à 003, 009 · REQ-SEC-003 |
 | **Comptes et annuaire** | `GET /account/me`, `GET /accounts` (annuaire des agents actifs ; matricule jamais renvoyé), `GET /accounts?ministere=&fonction=` (recherche), `GET /accounts/{id}` (fiche d'annuaire) | REQ-DIR-001, 006 |
 | **Conversations** | `POST /conversations` (parrain direct : refuse si le poste ne confère pas la capacité), `POST /group-requests` (demande), `POST /group-requests/{id}/approve`, `POST /group-requests/{id}/reject`, `GET /group-requests` (les demandes entrantes et sortantes de l'agent), `GET /conversations`, `GET /conversations/{id}`, `POST /conversations/{id}/members`, `DELETE /conversations/{id}/members/{agentId}`, `POST /conversations/{id}/leave`, `PATCH /conversations/{id}` (co-parrains, renommage via objet chiffré), `POST /conversations/{id}/suspend`, `POST /conversations/{id}/resume`, `DELETE /conversations/{id}` (suppression du groupe) | REQ-AUTHZ-005, 006 · REQ-GRP-001 à 009 |
 | **Objets crypto** | `GET /devices/olm-keys/status` (stock de pré-clés publiques), `POST /devices/olm-keys` (publication des identités et pré-clés signées), `POST /groupes/{id}/olm-keys` (identités des membres et réclamation atomique d'une pré-clé), `DELETE /admin/agents/{agentId}/olm-keys` (réinitialisation exceptionnelle auditée), `POST /groupes/{id}/messages` (enveloppe Megolm ou partage Olm opaque), `GET /groupes/{id}/messages` (rattrapage par séquence) | REQ-MSG-001 à 005 · REQ-CLS-001 |
 | **Médias** | `POST /media` (méta), `PUT /media/{id}/blob` (binaire chiffré), `GET /media/{id}/blob`, `GET /conversations/{id}/media` | REQ-FILE-001 à 004 |
-| **Présence** | `POST /presence` (signal ; écrit dans Redis seulement), `GET /conversations/{id}/presence` | REQ-DIR-002 à 005 |
+| **Présence** | `GET /presence` (membres en ligne calculés depuis le heartbeat WebSocket partagé PostgreSQL) | REQ-DIR-002 à 005 |
 | **Administration** (routes sous `/admin`) | `GET /admin/reference-data` (catégories, ministères et postes officiels), `GET /admin/accounts?page=1&limit=25` (réponse paginée `{items, page, limit, total, totalPages}`, y compris révoqués), `POST /admin/accounts` (pré-inscription puis envoi du code), `POST /admin/accounts/{id}/revoke` (révocation définitive), `POST /admin/accounts/{id}/suspend` (suspension temporaire), `POST /admin/accounts/{id}/reactivate` (réactivation d'un compte suspendu), `DELETE /admin/devices/{id}` (révocation d'appareil), `GET /admin/retentions?page=1&limit=25` et `GET /admin/audit-events?page=1&limit=25` (même enveloppe paginée) | REQ-REV-001 à 008 · REQ-OPS-013 · REQ-AUD-001 à 004 |
 
 **Routes absentes à dessein** : toute suppression de compte (REQ-OPS-013), toute action d'administration sur les groupes (REQ-GRP-005), toute lecture d'administration du contenu (G-06), tout libre-service de régénération du second facteur (REQ-ID-009).
@@ -55,6 +55,8 @@ première réponse contient toute la liste.
 - Les réponses d'erreur NE DOIVENT PAS révéler l'existence d'une ressource à un agent non autorisé.
 - Les routes de création, de gestion et de suspension DOIVENT vérifier le rôle de **créateur** ou de **parrain** (valeurs `createur` / `parrain`, `09_data_model.md` §2.1) **et** la capacité de parrainage déduite du poste officiel ; aucune vérification de ministère, de structure ou de périmètre n'est appliquée (ADR-12).
 - Les opérations d'administration sont limitées à 30 par minute (REQ-ABUSE-007) et auditées (REQ-AUD-001).
+- Les jetons d'accès expirent après 15 minutes et restent en mémoire côté navigateur ; le renouvellement fait tourner un jeton opaque conservé en cookie `HttpOnly`, `Secure` en production, `SameSite=Strict`, dont seul le hash est stocké en base. Les opérations avec cookie exigent une origine autorisée.
+- `POST /groupes/{id}/rotation/ack` reçoit `{epoch, senderId}` après import local réussi d'une clé Megolm. Une rotation reste `EN_ATTENTE` tant que tous les couples émetteur/destinataire attendus n'ont pas un reçu ; le serveur ne lit jamais la clé importée.
 
 ---
 

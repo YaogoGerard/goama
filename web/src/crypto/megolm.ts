@@ -24,7 +24,7 @@ interface OlmGroupSession {
   free(): void
 }
 interface OlmInboundGroupSession {
-  create(messageIndex: number, sessionKey: string): void
+  create(sessionKey: string): string
   decrypt(ciphertext: string): { plaintext: string; message_index: number }
   session_id(): string
   first_known_index(): number
@@ -144,7 +144,9 @@ async function createGroupUnlocked(ownerAgentId: string, groupId: string, epoch:
     await saveSession(db, ownerAgentId, outId(ownerAgentId, groupId), 'outbound', groupId, sessionId, JSON.stringify({ pickle, pickleKey }), session.message_index(), Date.now(), [], epoch, sessionKey)
     const inbound = new olm.InboundGroupSession()
     try {
-      inbound.create(0, sessionKey)
+      // libolm's InboundGroupSession.create() accepts the session key alone;
+      // the key already carries its first-known message index.
+      inbound.create(sessionKey)
       await saveSession(db, ownerAgentId, inId(ownerAgentId, groupId, sessionId), 'inbound', groupId, sessionId, JSON.stringify({ pickle: inbound.pickle(pickleKey), pickleKey }), -1, Date.now(), [], epoch)
     } finally { inbound.free() }
     return { sessionId }
@@ -177,7 +179,10 @@ export const megolmService = {
         const sessionKey = stored.record.encryptedShareKey && stored.record.shareKeyIv
           ? decoder.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(stored.record.shareKeyIv) }, await getStorageKey(db), new Uint8Array(stored.record.encryptedShareKey)))
           : session.session_key()
-        return { sessionId: session.session_id(), messageIndex: stored.record.encryptedShareKey ? 0 : session.message_index(), sessionKey }
+        // session_key() is the original outbound key, not an exported
+        // snapshot. An inbound session created from it starts at index zero
+        // even when this outbound session has already encrypted messages.
+        return { sessionId: session.session_id(), messageIndex: 0, sessionKey }
       } finally { session.free() }
     } finally { db.close() }
   },
@@ -186,10 +191,13 @@ export const megolmService = {
   async importSessionKey(ownerAgentId: string, groupId: string, sessionKey: string, messageIndex = 0, epoch = 0): Promise<string> {
     return withCryptoLock(`megolm-group:${ownerAgentId}:${groupId}`, async () => {
       await this.init()
+      // Goama distributes the original outbound session key (not an
+      // export_session() snapshot), which is valid from index zero.
+      if (messageIndex !== 0) throw new Error('megolm_index_initial_invalide')
       const db = await openDb()
       const session = new olm.InboundGroupSession()
       try {
-        session.create(messageIndex, sessionKey)
+        session.create(sessionKey)
         const sessionId = session.session_id()
         const existing = await loadSession(db, inId(ownerAgentId, groupId, sessionId))
         // Un partage répété ne doit pas réinitialiser l'index anti-rejeu d'une session existante.

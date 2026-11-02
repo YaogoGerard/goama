@@ -19,6 +19,7 @@ import {
 import { validerCorps } from "../lib/validation.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { z } from "zod";
+import { accuserReceptionCleGroupe } from "./rotation.js";
 
 export function enregistrerRoutesMessaging(app: FastifyInstance) {
   // ---- Groupes ----------------------------------------------------------
@@ -67,6 +68,15 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
   app.delete("/groupes/:id/membres/:agentId", { preHandler: [app.requireAuth] }, async (req) => {
     const { id, agentId } = req.params as { id: string; agentId: string };
     return retirerMembre(id, agentId, req.agent!.id);
+  });
+
+  // Reçu cryptographique émis uniquement après l'import local de la clé
+  // Megolm par le client. Le serveur vérifie l'appartenance, l'epoch et le
+  // partage correspondant avant de comptabiliser le reçu.
+  app.post("/groupes/:id/rotation/ack", { preHandler: [app.requireAuth] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const corps = validerCorps(z.object({ epoch: z.number().int().nonnegative(), senderId: z.string().uuid() }).strict(), req.body);
+    return accuserReceptionCleGroupe(id, req.agent!.id, corps.senderId, corps.epoch);
   });
 
   // Clés publiques Olm des membres. Les pré-clés ne sont consommées que
