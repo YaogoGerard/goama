@@ -47,8 +47,8 @@ function formatDate(iso: string) {
 
 <template>
   <div class="panel">
-    <div class="toolbar" style="justify-content: space-between; align-items: center">
-      <div style="font-size: 13px; color: var(--muted)">
+    <div class="toolbar items-center justify-between">
+      <div class="text-[13px] text-[var(--muted)]">
         Historique des actions
       </div>
       <button class="row-action" type="button" @click="emit('refresh')">
@@ -56,7 +56,7 @@ function formatDate(iso: string) {
       </button>
     </div>
 
-    <div style="overflow-x: auto">
+    <div class="overflow-x-auto">
       <table class="table">
         <thead>
           <tr>
@@ -68,12 +68,12 @@ function formatDate(iso: string) {
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="4" style="text-align: center; padding: 32px; color: var(--muted)">
+            <td colspan="4" class="p-8 text-center text-[var(--muted)]">
               Chargement des journaux d'audit...
             </td>
           </tr>
           <tr v-else-if="logs.length === 0">
-            <td colspan="4" style="text-align: center; padding: 32px; color: var(--muted)">
+            <td colspan="4" class="p-8 text-center text-[var(--muted)]">
               Aucun événement d'audit enregistré.
             </td>
           </tr>
@@ -82,11 +82,11 @@ function formatDate(iso: string) {
               <code>{{ formatDate(log.createdAt) }}</code>
             </td>
             <td>
-              <strong style="color: var(--accent)">{{ formatAction(log.action) }}</strong>
+              <strong class="text-[var(--accent)]">{{ formatAction(log.action) }}</strong>
             </td>
             <td>
               <code v-if="log.detail">{{ log.detail }}</code>
-              <span v-else style="color: var(--subtle)">—</span>
+              <span v-else class="text-[var(--subtle)]">—</span>
             </td>
             <td>
               <small>{{ log.actorId ? `Agent/Admin : ${log.actorId.slice(0, 8)}...` : 'Système' }}</small>

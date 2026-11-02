@@ -47,17 +47,17 @@ erDiagram
 | Entité | Champs principaux | Règles |
 |---|---|---|
 | **AGENT** | `id` · `nom` · `matricule` (unique) · `ministere` · `fonction` (libellé d'annuaire) · `poste_officiel` (matrice du PRD) · `categorie` (P, A, B, C, D, E, hors catégorie) · `statut` (`pre_inscrit`, `actif`, `suspendu`, `revoque`) · horodatage | REQ-ID-008 · REQ-OPS-013 (aucun statut « supprimé ») · la capacité de parrainage se **déduit** du poste, jamais stockée comme un droit indépendant |
-| **DEVICE** | `id` · `agent_id` · `libelle` · `cle_publique_mls` · `statut` (`pending`, `enroled`, `revoque`) · `enroled_le` · `revoque_le` | REQ-ID-009 · seules des clés publiques, jamais privées (G-13) |
+| **DEVICE** | `id` · `agent_id` · `libelle` · `cles_publiques_olm_curve25519_ed25519` · `statut` (`pending`, `enroled`, `revoque`) · `enroled_le` · `revoque_le` | REQ-ID-009 · seules des clés publiques, jamais privées (G-13) |
 | **SESSION** | `id` · `device_id` · `token_hash` (hachage, jamais le jeton) · `mfa_verifie_le` · `cree_le` · `expire_le` · `revoque_le` (null si active) | REQ-ID-006 (une seule active) · un agent n'a qu'un appareil (C-13) |
 | **CODE_ACTIVATION** | `id` · `agent_id` · `code_hash` (jamais le code en clair) · `statut` (`en_attente`, `utilise`, `expire`, `annule`) · `envoye_le` · `expire_le` (**24 h après l'envoi**) · `utilise_le` | REQ-ID-002 · une seule `en_attente` par agent, l'émission annule la précédente |
 | **FACTEUR_MFA** | `id` · `agent_id` · `type` (TOTP) · `secret_chiffre` (chiffrement au repos) · `statut` · horodatage | REQ-ID-003 · **aucun code de secours autogénéré** : perte du facteur ou de l'appareil = révocation puis nouvel enrôlement par l'Administrateur (REQ-ID-009, décision D12) |
-| **GROUPE** | `id` aléatoire · `cree_par` · `type` (`individuel`, `groupe`) · `statut` (`actif`, `suspendu`, `gele`, `supprime`) · `epoch_courant` · horodatage. Aucun nom en colonne : le titre voyage dans le message chiffré | REQ-GRP-006 · REQ-GRP-008 · REQ-GRP-009 |
+| **GROUPE** | `id` aléatoire · `cree_par` · `type` (`individuel`, `groupe`) · `statut` (`actif`, `suspendu`, `gele`, `supprime`) · `generation_crypto_courante` · horodatage. Aucun nom en colonne : le titre voyage dans le message chiffré | REQ-GRP-006 · REQ-GRP-008 · REQ-GRP-009 |
 | **APPARTENANCE** | `id` · `groupe_id` · `agent_id` · `role` (`createur`, `parrain`, `co_parrain`, `membre`) · `statut` (`actif`, `parti`, `retire`) · `arrive_le` · `parti_le` | REQ-GRP-003, 004 · maintient toujours au moins un parrain actif (REQ-GRP-009) |
 | **DEMANDE_GROUPE** | `id` · `demandeur_id` · `parrain_id` (null tant que non choisi) · `groupe_id` créé si validée · `statut` (`en_attente`, `validee`, `refusee`, `annulee`) · `decidee_le` | REQ-AUTHZ-006 · REQ-GRP-001/002 · aucune vérification de ministère ni de périmètre (ADR-12) |
 | **KEY_PACKAGE** | `id` · `agent_id` · `publie_le` · `consomme_le` | REQ-SEC-006 · ajouté seulement si agent actif |
-| **OBJET_CHIFFRE** | `id` · `groupe_id` · `appareil_expediteur` · `type` (`message_applicatif`, `commit_mls`, `welcome`, `key_package`) · `payload` (**binaire opaque chiffré**) · `seq_groupe` (ordre de publication) · `depose_le` · `purge_le` (30 jours REQ-MSG-007) | G-02 · la classification voyage **dans** le payload chiffré, jamais en colonne (G-09) |
+| **OBJET_CHIFFRE** | `id` · `groupe_id` · `appareil_expediteur` · `type` (`message_applicatif`, `partage_cle_olm`, `session_megolm`) · `payload` (**binaire opaque chiffré**) · `seq_groupe` (ordre de publication) · `depose_le` · `purge_le` (30 jours REQ-MSG-007) | G-02 · la classification voyage **dans** le payload chiffré, jamais en colonne (G-09) |
 | **LIVRAISON** | `id` · `objet_id` · `device_id` (destinataire) · `livre_le` (null tant que non récupéré) | REQ-MSG-005 · ligne créée à la publication, pour chaque destinataire actif |
-| **RETRAIT** | `id` · `groupe_id` · `agent_revoque_id` · `statut` (`en_attente`, `termine`, `echec`) · `depuis_le` · `termine_le` | REQ-REV-005 · suivi séparé du retrait cryptographique, par groupe, jusqu'à confirmation du commit MLS (G-05) |
+| **RETRAIT** | `id` · `groupe_id` · `agent_revoque_id` · `statut` (`en_attente`, `termine`, `echec`) · `depuis_le` · `termine_le` | REQ-REV-005 · suivi séparé du retrait cryptographique, par groupe, jusqu'à confirmation du rotation Megolm (G-05) |
 | **FICHIER_CHIFFRE** | `id` · `groupe_id` · `appareil_upload` · `stockage_ref` (clé MinIO opaque) · `taille` · `empreinte_integrite` · `depose_le` | REQ-FILE-001 à 004 (25 Mo max, REQ-FILE-004) |
 | **ACCES_FICHIER** | `device_id` · `fichier_id` · `acces_le` | REQ-FILE-005 (traçage de consultation minimale, sans contenu) |
 | **EVENEMENT_AUDIT** | agent · action · cible · details JSON **sans contenu** · horodatage | G-07 · REQ-AUD-002 · conservation 90 jours (REQ-AUD-004) |
@@ -73,7 +73,7 @@ erDiagram
 | Donnée | Emplacement | Justification |
 |---|---|---|
 | Clé privée de l'appareil (identity key) | IndexedDB, chiffrée par une clé WebCrypto non extractible (G-13) | REQ-SEC-003, 004 |
-| Secrets MLS (état de groupe, clés dérivées par epoch) | IndexedDB, même protection | REQ-SEC-004 |
+| Secrets Megolm (état de groupe, états de session Megolm et clés de session entrantes/sortantes) | IndexedDB, même protection | REQ-SEC-004 |
 | Messages déchiffrés | mémoire / IndexedDB chiffrée (claire dans la base locale), purgés selon le niveau (classification) | REQ-MSG-004 |
 
 ## 4. Cycle de vie et suppression

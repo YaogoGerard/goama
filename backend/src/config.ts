@@ -18,6 +18,8 @@ const SchemaEnv = z.object({
   DATABASE_URL: z.string().default("postgresql://goama:goama@localhost:5432/goama"),
   // Clé de signature des JWT : changer impérativement en production
   JWT_SECRET: z.string().default("secret-de-dev-changez-moi"),
+  // Clé indépendante de 32 octets (hex) pour chiffrer les secrets TOTP au repos.
+  TOTP_ENCRYPTION_KEY: z.string().default("").refine((value) => value === "" || /^[a-fA-F0-9]{64}$/.test(value), "TOTP_ENCRYPTION_KEY doit être vide en développement ou contenir 64 caractères hexadécimaux."),
   FILES_DIR: z.string().default("./data/files"),
   // Limitation de débit (doc 06 §7) : globale par IP, stricte sur /auth/connexion
   GLOBAL_RATE_MAX: z.coerce.number().default(300),
@@ -45,8 +47,11 @@ if (config.NODE_ENV === "production") {
   if (config.JWT_SECRET === "secret-de-dev-changez-moi" || config.JWT_SECRET.length < 32) {
     throw new Error("JWT_SECRET doit contenir au moins 32 caractères uniques en production.");
   }
-  if (config.CORS_ORIGIN === "true") {
-    throw new Error("CORS_ORIGIN doit être une origine HTTPS explicite en production.");
+  if (!/^[a-fA-F0-9]{64}$/.test(config.TOTP_ENCRYPTION_KEY)) {
+    throw new Error("TOTP_ENCRYPTION_KEY doit être une clé hexadécimale dédiée de 32 octets en production.");
+  }
+  if (config.CORS_ORIGIN === "true" || config.CORS_ORIGIN.split(",").some((origin) => !origin.trim().startsWith("https://"))) {
+    throw new Error("CORS_ORIGIN doit contenir uniquement des origines HTTPS explicites en production.");
   }
   for (const [name, value] of Object.entries({
     PUBLIC_WEB_URL: config.PUBLIC_WEB_URL,

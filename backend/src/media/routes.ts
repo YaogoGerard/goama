@@ -5,7 +5,7 @@
 // Le flux de sécurité est le suivant :
 //   1. le CLIENT chiffre le fichier (AES-GCM, clé aléatoire) ;
 //   2. il envoie le BLOB chiffré ici (le serveur ne voit que du bruit) ;
-//   3. il publie la CLÉ dans un message MLS "media_cle" (chiffré) ;
+//   3. il publie la CLÉ dans un message Megolm "media_cle" (chiffré) ;
 //   → le serveur n'a NI le contenu NI la clé. Épreuve « le serveur
 //     ne lit rien » : la table et le volume ne contiennent que du bruit.
 // =====================================================================

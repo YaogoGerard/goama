@@ -7,7 +7,7 @@
 // la ligne du groupe. Deux envois simultanés obtiennent donc des seq
 // distinctes et un ordre total, que tous les clients reproduisent.
 //
-// GARANTIE D'ÉPOQUE : un commit MLS déclaré avec un epoch différent de
+// GARANTIE D'ÉPOQUE : un rotation Megolm déclaré avec un epoch différent de
 // l'epoch courant du groupe est refusé (409 epoch_perime) — un client
 // dépassé ne peut pas diviser l'état du groupe.
 //
@@ -55,6 +55,122 @@ export async function creerGroupe(agentId: string) {
   return { id: groupe.id, epoch: groupe.epoch };
 }
 
+// Un agent non habilité peut demander à un parrain actif de créer le groupe.
+// Le parrainage ne dépend d'aucun ministère ou périmètre.
+export async function demanderGroupe(
+  demandeurId: string,
+  parrainId: string,
+  details?: { nom?: string; membres?: string[] },
+) {
+  if (demandeurId === parrainId) throw new ErreurApi(400, "parrain_invalide");
+  const membres = [...new Set(details?.membres ?? [])].filter(
+    (id) => id !== demandeurId && id !== parrainId,
+  );
+  const [demandeur, parrain, existante, membresCibles] = await Promise.all([
+    prisma.agent.findUnique({ where: { id: demandeurId } }),
+    prisma.agent.findUnique({ where: { id: parrainId } }),
+    prisma.groupRequest.findFirst({
+      where: { demandeurId, statut: "EN_ATTENTE" },
+      select: { id: true },
+    }),
+    membres.length
+      ? prisma.agent.findMany({
+          where: { id: { in: membres }, statut: "ACTIF", role: "AGENT" },
+          select: { id: true },
+        })
+      : Promise.resolve([] as { id: string }[]),
+  ]);
+  if (!demandeur || demandeur.statut !== "ACTIF") throw new ErreurApi(400, "agent_non_actif");
+  if (!parrain || parrain.statut !== "ACTIF" || !estHabiliteParrain(parrain.fonction)) {
+    throw new ErreurApi(400, "parrain_invalide");
+  }
+  if (existante) throw new ErreurApi(409, "demande_deja_existante");
+  if (membresCibles.length !== membres.length) throw new ErreurApi(400, "membres_invalides");
+
+  const demande = await prisma.groupRequest.create({
+    data: {
+      demandeurId,
+      parrainId,
+      nomRequest: details?.nom?.trim() || null,
+      membresRequest: membres,
+    },
+  });
+  await journaliser(demandeurId, "demande_creation_groupe", demande.id);
+  return { id: demande.id, statut: demande.statut };
+}
+
+export async function listerDemandesGroupe(agentId: string) {
+  const demandes = await prisma.groupRequest.findMany({
+    where: {
+      OR: [{ demandeurId: agentId }, { parrainId: agentId }],
+      statut: "EN_ATTENTE",
+    },
+    include: {
+      demandeur: { select: { id: true, prenom: true, nom: true, fonction: true, ministere: true } },
+      parrain: { select: { id: true, prenom: true, nom: true, fonction: true, ministere: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return demandes.map((demande) => ({
+    id: demande.id,
+    statut: demande.statut,
+    createdAt: demande.createdAt,
+    estDemandeur: demande.demandeurId === agentId,
+    demandeur: demande.demandeur,
+    parrain: demande.parrain,
+    nomRequest: demande.nomRequest,
+    membresRequest: demande.membresRequest,
+  }));
+}
+
+export async function approuverDemandeGroupe(demandeId: string, parrainId: string) {
+  const demande = await prisma.groupRequest.findUnique({ where: { id: demandeId } });
+  if (!demande || demande.parrainId !== parrainId) throw new ErreurApi(404, "demande_introuvable");
+  if (demande.statut !== "EN_ATTENTE") throw new ErreurApi(409, "demande_deja_traitee");
+
+  const parrain = await prisma.agent.findUnique({ where: { id: parrainId } });
+  const demandeur = await prisma.agent.findUnique({ where: { id: demande.demandeurId } });
+  if (!parrain || parrain.statut !== "ACTIF" || !estHabiliteParrain(parrain.fonction)) {
+    throw new ErreurApi(403, "parrainage_requis");
+  }
+  if (!demandeur || demandeur.statut !== "ACTIF") throw new ErreurApi(400, "agent_non_actif");
+
+  const resultat = await prisma.$transaction(async (tx) => {
+    const groupe = await tx.group.create({ data: { createdBy: demande.demandeurId } });
+    // Le demandeur et le parrain signataire sont tous deux PARRAINS du
+    // nouveau groupe ; les membres choisis dans l'assistant arrivent en MEMBRE.
+    const idsMembres = [...new Set(demande.membresRequest)].filter(
+      (id) => id !== demande.demandeurId && id !== parrainId,
+    );
+    await tx.groupMember.createMany({
+      data: [
+        { groupeId: groupe.id, agentId: demande.demandeurId, role: "PARRAIN" },
+        { groupeId: groupe.id, agentId: parrainId, role: "PARRAIN" },
+        ...idsMembres.map((id) => ({ groupeId: groupe.id, agentId: id, role: "MEMBRE" as const })),
+      ],
+    });
+    await tx.groupRequest.update({
+      where: { id: demandeId },
+      data: { statut: "APPROUVEE", groupeId: groupe.id, decidedAt: new Date() },
+    });
+    return groupe;
+  });
+  await journaliser(parrainId, "approbation_demande_groupe", demandeId);
+  return { id: resultat.id, epoch: resultat.epoch, nomRequest: demande.nomRequest, membresRequest: demande.membresRequest };
+}
+
+export async function rejeterDemandeGroupe(demandeId: string, parrainId: string) {
+  const demande = await prisma.groupRequest.findUnique({ where: { id: demandeId } });
+  if (!demande || demande.parrainId !== parrainId) throw new ErreurApi(404, "demande_introuvable");
+  if (demande.statut !== "EN_ATTENTE") throw new ErreurApi(409, "demande_deja_traitee");
+  await prisma.groupRequest.update({
+    where: { id: demandeId },
+    data: { statut: "REJETEE", decidedAt: new Date() },
+  });
+  await journaliser(parrainId, "rejet_demande_groupe", demandeId);
+  return { ok: true };
+}
+
 // Mes groupes (membreships actifs)
 export async function listerMesGroupes(agentId: string) {
   const memberships = await prisma.groupMember.findMany({
@@ -87,38 +203,59 @@ export async function ajouterMembre(groupeId: string, cibleId: string, demandeur
   const cible = await prisma.agent.findUnique({ where: { id: cibleId } });
   if (!cible || cible.statut !== "ACTIF") throw new ErreurApi(400, "agent_non_enrole");
 
-  await prisma.groupMember.upsert({
-    where: { groupeId_agentId: { groupeId, agentId: cibleId } },
-    create: { groupeId, agentId: cibleId, role: "MEMBRE" },
-    update: { removedAt: null }, // ré-ajout d'un ancien membre
+  const resultat = await prisma.$transaction(async (tx) => {
+    const existant = await tx.groupMember.findUnique({
+      where: { groupeId_agentId: { groupeId, agentId: cibleId } },
+    });
+    if (existant && existant.removedAt === null) {
+      const groupe = await tx.group.findUniqueOrThrow({ where: { id: groupeId }, select: { epoch: true } });
+      return { epoch: groupe.epoch, changed: false };
+    }
+    if (existant) {
+      await tx.groupMember.update({
+        where: { groupeId_agentId: { groupeId, agentId: cibleId } },
+        data: { removedAt: null, addedAt: new Date() },
+      });
+    } else {
+      await tx.groupMember.create({ data: { groupeId, agentId: cibleId, role: "MEMBRE" } });
+    }
+    const groupe = await tx.group.update({ where: { id: groupeId }, data: { epoch: { increment: 1 } }, select: { epoch: true } });
+    return { epoch: groupe.epoch, changed: true };
   });
   await journaliser(demandeur, "ajout_membre", groupeId);
 
-  // Les membres en ligne devront émettre le commit MLS d'ajout (le serveur
-  // ne peut pas le faire : il n'a pas les clés — ADR-08).
-  const tous = await prisma.groupMember.findMany({
-    where: { groupeId, removedAt: null },
-    select: { agentId: true },
-  });
-  relais.versGroupe(tous.map((m) => m.agentId), { type: "membre_ajoute", groupeId, agentId: cibleId });
-  return { ok: true };
+  // L'ajout exige une nouvelle session Megolm côté clients. Le serveur ne
+  // possède pas les clés et ne prétend donc pas réaliser lui-même la rotation.
+  if (resultat.changed) {
+    const tous = await prisma.groupMember.findMany({ where: { groupeId, removedAt: null }, select: { agentId: true } });
+    relais.versGroupe(tous.map((m) => m.agentId), { type: "membre_ajoute", groupeId, agentId: cibleId, epoch: resultat.epoch });
+  }
+  return { ok: true, epoch: resultat.epoch };
 }
 
 // Retrait d'un membre — RÉSERVÉ AU PARRAIN
 export async function retirerMembre(groupeId: string, cibleId: string, demandeur: string) {
   await exigerParrain(groupeId, demandeur);
-  await prisma.groupMember.updateMany({
-    where: { groupeId, agentId: cibleId, removedAt: null },
-    data: { removedAt: new Date() },
+  const resultat = await prisma.$transaction(async (tx) => {
+    const membre = await tx.groupMember.findUnique({ where: { groupeId_agentId: { groupeId, agentId: cibleId } } });
+    if (!membre || membre.removedAt !== null) throw new ErreurApi(404, "membre_introuvable");
+    await tx.groupMember.update({
+      where: { groupeId_agentId: { groupeId, agentId: cibleId } },
+      data: { removedAt: new Date() },
+    });
+    const groupe = await tx.group.update({ where: { id: groupeId }, data: { epoch: { increment: 1 } }, select: { epoch: true } });
+    await tx.retraitCryptographique.upsert({
+      where: { groupeId_agentId: { groupeId, agentId: cibleId } },
+      update: { statut: "EN_ATTENTE", erreur: null },
+      create: { groupeId, agentId: cibleId, statut: "EN_ATTENTE" },
+    });
+    return { epoch: groupe.epoch };
   });
   await journaliser(demandeur, "retrait_membre", groupeId);
 
-  const tous = await prisma.groupMember.findMany({
-    where: { groupeId, removedAt: null },
-    select: { agentId: true },
-  });
-  relais.versGroupe(tous.map((m) => m.agentId), { type: "membre_retire", groupeId, agentId: cibleId });
-  return { ok: true };
+  const tous = await prisma.groupMember.findMany({ where: { groupeId, removedAt: null }, select: { agentId: true } });
+  relais.versGroupe(tous.map((m) => m.agentId), { type: "membre_retire", groupeId, agentId: cibleId, epoch: resultat.epoch });
+  return { ok: true, epoch: resultat.epoch, rotationCryptographique: "EN_ATTENTE" as const };
 }
 
 // ---- Messages ----------------------------------------------------------
@@ -134,10 +271,10 @@ export async function posterMessage(
   }
 
   // Transaction + verrou pessimiste sur la ligne du groupe :
-  //   1. SELECT … FOR UPDATE gèle la ligne jusqu'au commit ;
+  //   1. SELECT … FOR UPDATE gèle la ligne jusqu'à la validation de la transaction ;
   //   2. epoch vérifié contre l'état courant ;
   //   3. seq = max+1 calculé sans course ;
-  //   4. insertion ; le commit libère le verrou.
+  //   4. insertion ; la validation de la transaction libère le verrou.
   // Toute erreur (epoch périmé) annule tout : aucune seq « perdue » ni dupliquée.
   const message = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupeId} FOR UPDATE`;
@@ -192,20 +329,63 @@ export async function listerMessages(groupeId: string, demandeur: string, apresS
   });
 }
 
-// ---- KeyPackages MLS ----------------------------------------------------
 
-// L'agent publie ses KeyPackages ( RFC 9420) après activation ; les autres
-// agents les consomment pour l'ajouter à un groupe. OPAQUE pour le serveur.
-export async function publierKeyPackage(agentId: string, payload: string) {
-  const kp = await prisma.keyPackage.create({ data: { agentId, payload } });
-  return { id: kp.id };
-}
 
-export async function prendreKeyPackages(agentId: string, nombre: number) {
-  const kps = await prisma.keyPackage.findMany({
-    where: { agentId },
-    orderBy: { createdAt: "asc" }, // les plus anciens d'abord (usage quasi one-time)
-    take: Math.min(Math.max(nombre, 1), 10),
-  });
-  return kps.map((k) => ({ id: k.id, payload: k.payload }));
+/**
+ * Retourne les clés publiques Olm des membres actifs d'un groupe. Les OTK
+ * ne sont consommées que pour les agents explicitement listés dans claimFor.
+ * Le verrou sur Agent sérialise les réclamations concurrentes d'une même clé.
+ */
+export async function listerClesOlmPourGroupe(groupeId: string, demandeur: string, claimFor: string[]) {
+  await exigerMembre(groupeId, demandeur);
+  const [membresActifs, tousLesMembres] = await Promise.all([
+    prisma.groupMember.findMany({
+      where: { groupeId, removedAt: null, agent: { statut: "ACTIF" } },
+      select: { agentId: true },
+    }),
+    // Les identités publiques des anciens membres restent consultables pour
+    // déchiffrer l'historique envoyé avant leur retrait ; aucune OTK ne leur
+    // est attribuée car claimFor est limité aux membres actifs.
+    prisma.groupMember.findMany({ where: { groupeId }, select: { agentId: true } }),
+  ]);
+  const idsActifs = new Set(membresActifs.map((m) => m.agentId));
+  if (claimFor.some((id) => id === demandeur || !idsActifs.has(id))) {
+    throw new ErreurApi(403, "destinataire_olm_hors_groupe");
+  }
+
+  const tousIds = [...new Set(tousLesMembres.map((m) => m.agentId))];
+  return Promise.all(tousIds.filter((agentId) => agentId !== demandeur).map(async (agentId) => {
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Agent" WHERE id = ${agentId} FOR UPDATE`;
+      const packageKey = await tx.keyPackage.findFirst({ where: { agentId }, orderBy: { createdAt: "desc" } });
+      if (!packageKey) return { agentId, deviceKeys: null, deviceSignature: null, oneTimeKey: null };
+      let payload: {
+        deviceKeys: { device_id: string; algorithms: string[]; keys: Record<string, string> };
+        deviceSignature: string;
+        oneTimeKeys: { keyId: string; key: string; signature: string }[];
+        claimedFor?: Record<string, { keyId: string; key: string; signature: string }>;
+      };
+      try { payload = JSON.parse(packageKey.payload) as typeof payload; }
+      catch { return { agentId, deviceKeys: null, deviceSignature: null, oneTimeKey: null }; }
+      if (!payload.deviceKeys || !payload.deviceSignature || !Array.isArray(payload.oneTimeKeys)) {
+        return { agentId, deviceKeys: null, deviceSignature: null, oneTimeKey: null };
+      }
+      payload.claimedFor ??= {};
+      let oneTimeKey: { keyId: string; key: string; signature: string } | null = null;
+      if (claimFor.includes(agentId)) {
+        // Une seule pré-clé est attribuée à chaque couple (émetteur, destinataire).
+        // Répéter la requête renvoie la même clé au même émetteur au lieu de
+        // permettre à un membre de vider le stock de pré-clés du groupe.
+        oneTimeKey = payload.claimedFor[demandeur] ?? null;
+        if (!oneTimeKey) {
+          oneTimeKey = payload.oneTimeKeys.shift() ?? null;
+          if (oneTimeKey) payload.claimedFor[demandeur] = oneTimeKey;
+        }
+        if (oneTimeKey) {
+          await tx.keyPackage.update({ where: { id: packageKey.id }, data: { payload: JSON.stringify(payload) } });
+        }
+      }
+      return { agentId, deviceKeys: payload.deviceKeys, deviceSignature: payload.deviceSignature, oneTimeKey };
+    });
+  }));
 }

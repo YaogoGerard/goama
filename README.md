@@ -1,194 +1,67 @@
-<p align="center">
-  <img src="docs/design/logo.png" alt="Logo Goama" width="180">
-</p>
+# Goama — messagerie souveraine de l'administration
 
-<h1 align="center">Goama</h1>
+**Équipe projet :** Codalchemists — Burkina Institute of Technology, Koudougou
+**Dépôt :** https://github.com/YaogoGerard/goama
 
-[![Vue.js](https://img.shields.io/badge/Vue.js-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Fastify](https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white)](https://fastify.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169e1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Tailwind CSS](https://img.shields.io/badge/Admin-Tailwind_CSS-06b6d4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![OpenMLS](https://img.shields.io/badge/E2EE-OpenMLS%20%2F%20WASM-7b42bc?logo=rust&logoColor=white)](https://openmls.tech/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](backend/LICENSE)
+Goama est une messagerie web destinée aux échanges professionnels des agents publics du Burkina Faso : conversations individuelles et de groupe, partage de fichiers chiffrés, enrôlement institutionnel, authentification multifacteur, rôles et révocation. Le projet est conçu pour être auto-hébergé, sans service SaaS indispensable : l'État conserve la maîtrise de ses données et de son infrastructure.
 
-**Goama** est un prototype de messagerie administrative souveraine pour le
-Hackathon 226 — édition 2026. Le projet fournit une API, une interface web et
-un espace d’administration déployables sur une infrastructure maîtrisée.
+## Principe de conception
 
-> **Statut : prototype de sprint.** Les fonctions de chiffrement de bout en
-> bout et de messagerie complète doivent encore être intégrées et validées
-> avant toute présentation comme solution conforme au socle de sécurité.
+Le serveur est un **relais aveugle** : il authentifie les agents, applique les règles institutionnelles et relaye uniquement des enveloppes chiffrées. Il ne détient aucune clé de conversation : l'Administrateur ne peut pas lire les messages, y compris dans un groupe dont il gère la vie institutionnelle. Il ne conserve que les métadonnées documentées dans les documents d'architecture et de sécurité.
+
+Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly côté navigateur) : Megolm chiffre les messages du groupe, Olm transporte individuellement chaque clé de session vers un autre membre, sur un canal authentifié et vérifié par signatures Ed25519. Les pièces jointes sont chiffrées côté client (AES-GCM via Web Crypto) avec la clé transmise dans le flux Megolm. Le périmètre cryptographique est strictement **mono-appareil** : une seule session active par agent ; le multi-appareil est hors périmètre actuel.
 
 ## Architecture
 
-```text
-┌──────────────┐     ┌──────────────┐
-│ Web :3000    │     │ Admin :5173  │
-│ Vue 3 +      │     │ Vue 3 +      │
-│ OpenMLS/WASM │     │ Tailwind CSS │
-│ Nginx        │     │ Nginx        │
-└──────┬───────┘     └──────┬───────┘
-       └──────────────┬─────┘
-                      │ /api
-               ┌──────▼──────┐
-               │ API :8080   │
-               │ Fastify     │
-               └──────┬──────┘
-                      │
-               ┌──────▼──────┐
-               │ PostgreSQL  │
-               └─────────────┘
-```
+- **Client agent (`web/`)** : Vue 3, TypeScript, Vite ; Megolm/Olm en WebAssembly, IndexedDB chiffrée localement.
+- **Console d'administration (`admin/`)** : Vue 3 ; pré-inscription, enrôlement, révocation, journal d'audit.
+- **API (`backend/`)** : Node.js, Fastify 5, TypeScript, Prisma 7 ; authentification 2FA, sessions uniques, habilitations et parrainage, relais de messages, WebSockets.
+- **Données :** PostgreSQL 17 ; stockage d'enveloppes opaques (aucun clair en base).
+- **Déploiement :** Docker Compose, Nginx en terminaison statique et proxy `/api`.
 
-La stack complète est orchestrée par [`docker-compose.yml`](docker-compose.yml).
-Les services web et admin restent séparés ; le frontend public `web/` n’est pas
-modifié par la refonte de l’administration.
+## Installation locale
 
-## Fonctionnalités actuelles
-
-- authentification administrateur avec mot de passe et TOTP ;
-- protocole E2EE retenu : MLS via OpenMLS compilé en WebAssembly côté client
-  (intégration à finaliser) ;
-- rôles, pré-inscription et suspension/révocation d’agents ;
-- journal d’audit et suivi des retraits ;
-- interface d’administration responsive avec thème clair/sombre ;
-- bootstrap automatique du premier administrateur au démarrage de l’API ;
-- déploiement local reproductible avec Docker Compose ;
-- tests backend et tests de l’interface admin.
-
-## Prérequis
-
-- Docker et Docker Compose ;
-- Git ;
-- OpenSSL, pour générer la clé JWT locale.
-
-## Lancer le projet
-
-Depuis la racine, le lancement recommandé pour une démonstration locale est :
+Prérequis : Git, Docker Engine avec Docker Compose, et OpenSSL.
 
 ```bash
+git clone https://github.com/YaogoGerard/goama.git
+cd goama
 ./setup.sh
 ```
 
-Le script demande le matricule et le mot de passe sans l'afficher, configure
-`backend/.env`, puis construit et démarre toute la stack. Le mot de passe n'est
-pas passé en argument de commande.
-Pour une démonstration rapide sans saisir de code TOTP, activez explicitement le
-mode démo avant de lancer Compose :
+Le script demande le matricule et le mot de passe de l'administrateur initial, génère des secrets locaux (PostgreSQL, `JWT_SECRET`, clé dédiée de chiffrement des secrets TOTP), lance les services et applique les migrations. Les fichiers `.env` ne sont jamais committés et sont créés avec des permissions restrictives. Les ports applicatifs sont liés en `127.0.0.1` par défaut ; PostgreSQL n'est pas publié sur l'hôte.
 
-```bash
-sed -i 's/^DEMO_AUTH_BYPASS_TOTP=.*/DEMO_AUTH_BYPASS_TOTP=true/' backend/.env
-sed -i 's/^NODE_ENV=.*/NODE_ENV=development/' backend/.env
-docker compose up -d --build
-```
+- Messagerie agent : http://localhost:3000
+- Administration : http://localhost:5173
+- API : http://localhost:8080 (`/healthz`)
 
-Avec ce mode local, la connexion de `ADMIN001` utilise `000000` comme code TOTP.
-`NODE_ENV=development` est obligatoire : le backend refuse le bypass dès que
-`NODE_ENV=production` est utilisé.
+Le secret TOTP de l'administrateur initial est affiché dans les journaux : `docker compose logs api`. Comptes et données de démonstration sont strictement fictifs.
 
-Pour un lancement normal avec TOTP obligatoire :
-
-```bash
-sed -i 's/^DEMO_AUTH_BYPASS_TOTP=.*/DEMO_AUTH_BYPASS_TOTP=false/' backend/.env
-docker compose up -d --build
-```
-
-Le script écrit les paramètres dans `backend/.env` puis l’entrypoint crée
-l’administrateur après que PostgreSQL est disponible, jamais pendant la
-construction de l’image Docker.
-
-Adresses locales :
-
-| Service | Adresse |
-|---|---|
-| Application web | http://localhost:3000 |
-| Administration | http://localhost:5173 |
-| API | http://localhost:8080 |
-| PostgreSQL | localhost:5432 |
-
-Au premier démarrage, l’entrypoint `backend/scripts/docker-entrypoint.sh`
-applique les migrations puis exécute directement le bootstrap compilé.
-Ce bootstrap est idempotent : il crée un administrateur uniquement si aucun
-administrateur n’existe. Les valeurs sont obligatoires et se configurent dans
-`backend/.env` :
-
-```env
-ADMIN_MATRICULE=ADMIN001
-ADMIN_PASSWORD=changez-ce-mot-de-passe
-# Démo locale uniquement : permet d'utiliser 000000 à la place du TOTP
-DEMO_AUTH_BYPASS_TOTP=true
-DEMO_ADMIN_MATRICULE=ADMIN001
-```
-
-Le secret TOTP initial est affiché une seule fois dans les logs :
-
-```bash
-docker compose logs api
-```
-
-Le contournement TOTP est désactivé par défaut, limité au compte administrateur
-de démonstration et refusé lorsque `NODE_ENV=production`. Il ne doit jamais
-être activé sur une installation réelle.
-
-Arrêter la stack sans supprimer les volumes :
-
-```bash
-docker compose down
-```
-
-## Développement et validation
+## Vérification
 
 ```bash
 cd backend && npm ci && npm run typecheck && npm test
 cd ../admin && npm ci && npm run build && npm run test:e2e
-cd ../web && npm ci && npm run build
+cd ../web && npm ci && npm run build && npm run test:e2e
 ```
 
-Les comptes de démonstration ne sont pas créés par le code de l'application.
-Ils sont chargés explicitement depuis `backend/seed/demo-accounts.json` :
+- Tests backend : contrôle d'accès (JWT, 2FA, verrouillage, révocation immédiate, session unique, parrainage), stockage opaque de contenus, enveloppes Megolm/Olm, signatures Ed25519, chiffrement au repos du TOTP.
+- Tests admin : parcours d'interface (vitest/happy-dom) et tests de fumée Playwright contre la stack Docker (`npm run test:smoke`).
+- Tests web : parcours d'interface, publication de clés Olm et absence de texte en clair (Playwright).
 
-```bash
-cd backend && npm run db:seed
-```
+## Sécurité
 
-Pour un autre environnement, fournissez un jeu JSON séparé sans modifier le
-code :
-
-```bash
-DEMO_ACCOUNTS_FILE=/chemin/comptes-test.json npm run db:seed
-```
-
-## Technologies et licences
-
-| Composant | Technologie | Licence |
-|---|---|---|
-| API | Node.js, TypeScript, Fastify | MIT |
-| Données | PostgreSQL, Prisma | PostgreSQL License / Apache 2.0 |
-| Interface web | Vue 3, Vite, TypeScript | MIT |
-| Interface admin | Vue 3, Vite, Tailwind CSS | MIT |
-| Chiffrement E2E cible | OpenMLS, MLS/RFC 9420, WebAssembly | MIT / Apache-2.0 |
-| Conteneurs | Docker Compose, Nginx | Apache 2.0 / BSD-2-Clause |
-
-Les licences et notices des dépendances transitives doivent être vérifiées
-avant le dépôt final. La licence du prototype est disponible dans
-[`backend/LICENSE`](backend/LICENSE).
+- Agent enrôlé uniquement, authentification à deux facteurs (secret + TOTP), verrouillage après échecs, session unique par agent ; révocation immédiate : sessions, WebSockets (code 4003), pré-clés et génération de groupe invalidés en une opération auditée.
+- Secrets TOTP chiffrés au repos (AES-256-GCM, clé dédiée et séparée du secret JWT) ; jamais de clé Megolm brute ni de clé privée côté serveur.
+- Limites connues : identités épinglées en TOFU (vérification institutionnelle hors bande à construire), forward secrecy de Megolm partielle (d'où rotation à 100 messages / 7 jours et après tout changement de membres). Pour la liste complète et les règles de déploiement : `docs/NOTE_SECURITE.md`.
 
 ## Documentation
 
-- [Fondations et méthode](docs/00_foundation_engineering_mindset.md)
-- [Exigences produit](docs/01_requirements_prd.md)
-- [Exigences système](docs/02_requirements_srs.md)
-- [Garanties et invariants](docs/03_design_contract_invariants.md)
-- [Décisions d’architecture](docs/06_architecture_decisions.md)
-- [Tests d’acceptation](docs/07_acceptance_tests.md)
-- [Contrat API](docs/08_interfaces_api.md)
-- [Modèle de données](docs/09_data_model.md)
+- `docs/` — corpus d'ingénierie numéroté 00 à 10 : fondation, exigences produit, SRS, invariants, modélisation C4/UML, décisions d'architecture (ADRs), tests d'acceptation, interfaces API, modèle de données, convention du dépôt.
+- `docs/13_protocole_olm_megolm.md` — détail du protocole retenu (publication de clés, distribution, rotation, limites).
+- `docs/NOTE_SECURITE.md` — règles de déploiement et limites cryptographiques.
+- `docs/TECHNOLOGIES_LICENCES.md` — inventaire des technologies et licences.
 
-## Limites connues
+## Licence
 
-Le prototype ne doit pas être présenté comme une messagerie souveraine complète
-tant que le protocole de chiffrement de bout en bout éprouvé, les conversations,
-les groupes et les fichiers chiffrés ne sont pas intégrés et démontrés. Les
-données et comptes utilisés pour les tests sont fictifs.
+Code projet sous licence **MIT** (`LICENSE`). Les technologies tierces et leurs licences sont répertoriées dans `docs/TECHNOLOGIES_LICENCES.md`.

@@ -55,7 +55,7 @@ Une fonctionnalité n'est pas terminée simplement parce qu'elle fonctionne dans
 
 1. **Le socle de sécurité d'abord** : chiffrement de bout en bout, serveur aveugle, enrôlement avec second facteur, révocation, intrus rejeté.
 2. **Trois innovations, démontrées** : accusés de lecture à valeur probante, présence et annuaire, classification des messages. Mieux vaut peu de fonctions complètes et expliquées qu'un catalogue à moitié fait.
-3. **Risque majeur assumé** : le chiffrement repose sur OpenMLS compilé en WebAssembly, sans plan B (décision de l'équipe). Ce risque est consigné (`06_architecture_decisions.md`, R-01) et le prototype se fait en premier.
+3. **Risque majeur assumé** : le chiffrement repose sur Megolm compilé en WebAssembly, sans plan B (décision de l'équipe). Ce risque est consigné (`06_architecture_decisions.md`, R-01) et le prototype se fait en premier.
 4. **Comprendre chaque ligne** : chaque membre doit pouvoir expliquer le code de chiffrement et d'authentification ; l'incapacité à l'expliquer est éliminatoire.
 5. **Hypothèses écrites** : toute décision non tranchée devient une hypothèse datée (`02_requirements_srs.md`, §5).
 6. **Ne jamais annoncer ce qui n'est pas testé** : ni dans les notes, ni dans le README, ni dans la vidéo.

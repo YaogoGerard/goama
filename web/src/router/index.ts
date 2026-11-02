@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import ChatView from '../views/ChatView.vue'
+import ActivationView from '../views/ActivationView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -10,9 +11,18 @@ const routes = [
     component: LoginView
   },
   {
+    path: '/activation',
+    name: 'Activation',
+    component: ActivationView
+  },
+  {
     path: '/chat',
     name: 'Chat',
     component: ChatView
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 

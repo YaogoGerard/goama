@@ -1,6 +1,6 @@
 import { prisma } from "./plugins/db.js";
 import { hasherSecret } from "./lib/crypto.js";
-import { genererSecretTotp } from "./lib/totp.js";
+import { chiffrerSecretTotp, genererSecretTotp } from "./lib/totp.js";
 
 const matricule = process.env.ADMIN_MATRICULE;
 const motDePasse = process.env.ADMIN_PASSWORD;
@@ -18,7 +18,13 @@ if (existant) {
   console.log(`Administrateur déjà présent (${existant.matricule}), amorçage ignoré.`);
   await prisma.$disconnect();
 } else {
-  const totp = genererSecretTotp();
+  if (process.env.NODE_ENV === "production" && !process.env.ADMIN_TOTP_SECRET) {
+    throw new Error("ADMIN_TOTP_SECRET doit être injecté par le gestionnaire de secrets en production.");
+  }
+  const totp = process.env.ADMIN_TOTP_SECRET ?? genererSecretTotp();
+  if (!/^[A-Z2-7]{16,64}$/.test(totp)) {
+    throw new Error("ADMIN_TOTP_SECRET doit être un secret Base32 valide (16 à 64 caractères A-Z/2-7).");
+  }
   await prisma.agent.create({
     data: {
       matricule,
@@ -30,10 +36,16 @@ if (existant) {
       role: "ADMIN",
       statut: "ACTIF",
       secretHash: hasherSecret(motDePasse),
-      totpSecret: totp,
+      totpSecret: chiffrerSecretTotp(totp),
     },
   });
 
-  console.log(`Administrateur créé (${matricule}). Configurez le TOTP via un canal de provisioning sécurisé.`);
+  console.log(`Administrateur créé (${matricule}).`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Secret TOTP initial (à enregistrer dans une application d’authentification puis à protéger) : ${totp}`);
+    console.log("Attention : cette valeur apparaît dans les journaux locaux Docker. Supprimez/expurgez ces journaux après provisionnement.");
+  } else {
+    console.log("Secret TOTP fourni par le gestionnaire de secrets ; aucun secret n'est écrit dans les journaux.");
+  }
   await prisma.$disconnect();
 }

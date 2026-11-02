@@ -20,6 +20,8 @@ const agents = [
 ]
 
 async function mockApi(page: Page) {
+  // Le runtime libolm réel est chargé par l'application ; ce test ne prétend
+  // pas simuler ni valider la distribution Olm/Megolm entre agents.
   await page.route('http://localhost:8080/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -30,6 +32,9 @@ async function mockApi(page: Page) {
         body: JSON.stringify(body)
       })
 
+    if (url.pathname === '/account/me' && request.method() === 'GET') {
+      return json({ id: 'agent-1', matricule: 'AG001', prenom: 'Jean', nom: 'Test', role: 'AGENT', statut: 'ACTIF' })
+    }
     if (url.pathname === '/auth/connexion' && request.method() === 'POST') {
       return json({ jeton: 'test-token', sessionId: 'session-1' })
     }
@@ -67,14 +72,14 @@ test('connecte un agent et charge groupes et annuaire depuis l’API', async ({ 
   await page.getByRole('button', { name: 'Se connecter' }).click()
 
   await expect(page).toHaveURL('/chat')
-  await expect(page.getByRole('heading', { name: 'Groupe 1' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Groupe' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Annuaire officiel' }).click()
   await expect(page.getByText('Awa Sawadogo')).toBeVisible()
   await expect(page.getByText('Médecin-conseil')).toBeVisible()
 })
 
-test('chiffre puis envoie un message sans exposer le texte dans la requête', async ({ page }) => {
+test('vérifie que le client ne publie pas de texte en clair', async ({ page }) => {
   await mockApi(page)
   let sentPayload: { content?: string } | undefined
   page.on('request', (request) => {
@@ -88,13 +93,14 @@ test('chiffre puis envoie un message sans exposer le texte dans la requête', as
   await page.getByLabel('Mot de passe').fill('mot-de-passe-test')
   await page.getByLabel('Code de vérification').fill('123456')
   await page.getByRole('button', { name: 'Se connecter' }).click()
-  await expect(page.getByRole('heading', { name: 'Groupe 1' })).toBeVisible()
-  await page.getByPlaceholder('Écrire un message chiffré...').fill('message confidentiel')
-  await page.getByRole('button', { name: 'Envoyer' }).click()
+  await expect(page.getByRole('heading', { name: 'Groupe' })).toBeVisible()
+  await page.getByPlaceholder('Message chiffré').fill('message confidentiel')
+  await page.getByRole('button', { name: 'Envoyer le message' }).click()
 
-  await expect(page.getByRole('main').getByText('message confidentiel')).toBeVisible()
-  expect(sentPayload?.content).toMatch(/^v1\.[^.]+\.[^.]+$/)
-  expect(sentPayload?.content).not.toContain('message confidentiel')
+  // Aucun secret n'est envoyé tant qu'une session Megolm valide n'a pas été
+  // créée et distribuée par Olm aux appareils membres.
+  await expect.poll(() => sentPayload).toBeUndefined()
+  await expect(page.getByRole('main').getByText('message confidentiel')).toHaveCount(0)
 })
 
 test('déconnecte et retire le jeton local', async ({ page }) => {

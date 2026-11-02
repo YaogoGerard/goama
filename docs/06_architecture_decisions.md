@@ -7,12 +7,15 @@ Ce document choisit les technologies **après** les composants (`04_transition_r
 
 | Composant | Réalisation |
 |---|---|
-| Cœur cryptographique (client) | Client web Vue.js 3 + Vite ; OpenMLS compilé en WebAssembly ; IndexedDB et WebCrypto |
+| Cœur cryptographique (client) | Client web Vue.js 3 + Vite ; Megolm via libolm WebAssembly ; IndexedDB et WebCrypto |
 | Identité et accès, Conversations et relais, Fichiers, Présence et annuaire, Garde-fous | Modules de l'API Fastify (monolithe modulaire) : `auth`, `agents`, `messaging`, `media`, `presence`, `guard` |
 | Administration | Tableau de bord Vue.js 3, séparé du client |
-| Données | PostgreSQL (comptes, sessions, blobs chiffrés, audit) · Redis (présence, révocation, compteurs, publication) · MinIO (fichiers chiffrés) |
-| Tâches asynchrones | BullMQ (purges, expiration des codes, alertes de retrait en attente) |
-| Frontal | Caddy (TLS, répartition, limite par IP) |
+| Données (déploiement actuel) | PostgreSQL ; fichiers chiffrés sur volume local (`FILES_DIR`) ; aucun Redis ni MinIO dans Compose |
+| Tâches asynchrones (déploiement actuel) | Purge périodique via `setInterval` dans l'API ; aucun worker BullMQ |
+| Temps réel (déploiement actuel) | Relais WebSocket en mémoire, limité à une instance API |
+| Frontal (déploiement actuel) | Nginx sur HTTP/80 ; TLS et terminaison HTTPS à fournir par un proxy externe |
+
+> **Écart entre cible et code livré (1er novembre 2026).** Les ADR ci-dessous décrivent en partie une architecture cible. Ils ne doivent pas être lus comme des composants déjà déployés. Le `docker-compose.yml` actuel ne contient que PostgreSQL, API, client et administration. Redis, BullMQ, MinIO, Caddy, le relais WebSocket distribué et le TLS intégré ne sont pas présents dans ce déploiement. Toute mise en production doit tenir compte de ces limites ou réaliser explicitement ces évolutions.
 
 ## 2. Technologies et licences
 
@@ -20,7 +23,7 @@ Ce document choisit les technologies **après** les composants (`04_transition_r
 
 | Technologie | Rôle | Licence attendue | Remarque |
 |---|---|---|---|
-| OpenMLS (Rust) | Protocole MLS, RFC 9420 | MIT | Compilé en WebAssembly (wasm-bindgen) |
+| libolm / Megolm | Protocole de groupe Matrix Megolm (`m.megolm.v1.aes-sha2`) | Apache-2.0 | WebAssembly ; Olm sert au transport pair-à-pair des clés de session |
 | Vue.js 3, Vite, Tailwind CSS | Client et tableau de bord | MIT | |
 | Fastify, @fastify/websocket, @fastify/rate-limit | API, temps réel, limitation | MIT | |
 | Node.js (LTS) | Exécution du serveur | MIT | Confirmé par l'équipe (H-12) |
@@ -36,38 +39,38 @@ Ce document choisit les technologies **après** les composants (`04_transition_r
 
 | ID | Décision | Pourquoi | Conséquence |
 |---|---|---|---|
-| ADR-01 | Client **web** avec OpenMLS en WebAssembly | Choix de l'équipe ; pas d'installation | Aucun paquet officiel prêt à l'emploi trouvé : il faut compiler ou retenir une liaison ; premier prototype à réussir (R-01) |
-| ADR-02 | Clés privées et état MLS dans **IndexedDB**, chiffrés par une clé WebCrypto **non extractible** | `localStorage` est lisible par tout script de la page | La clé ne peut pas être copiée, mais utilisée par un script injecté : politique de contenu stricte (REQ-SEC-009) |
+| ADR-01 | Client **web** avec Megolm via libolm WebAssembly | Choix de l'équipe ; pas d'installation | Le paquet npm `@matrix-org/olm` expose libolm en WebAssembly ; validation du chargement WASM et des tests multi-clients obligatoire |
+| ADR-02 | Clés et état Megolm dans **IndexedDB**, chiffrés par une clé WebCrypto **non extractible** | `localStorage` est lisible par tout script de la page | La clé ne peut pas être copiée, mais utilisée par un script injecté : politique de contenu stricte (REQ-SEC-009) |
 | ADR-03 | **Monolithe modulaire** | Une équipe de 3, moins d'une semaine | Frontières par module ; les modules suivent les groupes de `04` |
 | ADR-04 | **Redis** pour présence, liste noire des sessions, compteurs et publication | Données volatiles, forte fréquence | Pas la source de vérité : rechargé depuis PostgreSQL (INV-007) |
 | ADR-05 | **BullMQ** pour les tâches différées | Reprise après redémarrage | Toute tâche de distribution contrôle d'abord l'état « révoqué » dans Redis (REQ-REV-003) |
 | ADR-06 | **MinIO** pour les fichiers chiffrés | Choix de l'équipe | Licence à relire (H-13) |
 | ADR-07 | **Session unique** par agent | Choix de l'équipe : un seul appareil | Une nouvelle session ferme l'ancienne ; changement de navigateur = nouvel appareil sans historique (H-07) |
-| ADR-08 | Révocation en **deux temps** | Coupure serveur immédiate + retrait MLS réel | Le serveur ne peut pas commiter : un membre en ligne émet le retrait (REQ-REV-004) |
-| ADR-09 | « Lu » = **message MLS applicatif signé** | Non falsifiable par le serveur | Preuve technique, pas de valeur légale affirmée (H-10) |
+| ADR-08 | Révocation en **deux temps** | Coupure serveur immédiate + rotation Megolm réelle | Le serveur ne crée aucune clé : un membre restant génère une nouvelle session sortante et distribue sa clé par Olm (REQ-REV-004) |
+| ADR-09 | « Lu » = **message applicatif Megolm authentifié, avec preuve de lecture signée par le client** | Non falsifiable par le serveur | Preuve technique, pas de valeur légale affirmée (H-10) |
 | ADR-10 | « Distribué » = information du **serveur** | Évite un second message signé par message | Non probante ; seule « Lu » l'est (G-08) |
-| ADR-11 | **Attestation d'enrôlement** : signature standard (Ed25519) de la clé d'enrôlement sur matricule, appareil, clé publique et expiration ; clé publique épinglée dans le client | Empêche un serveur compromis d'ajouter un faux membre (REQ-SEC-006) | Assemblage de primitives standard, pas un nouveau protocole ; à justifier face à C-01 (R-04). Alternative : credentials X.509 de MLS |
+| ADR-11 | **Attestation d'enrôlement** : signature standard (Ed25519) de la clé d'enrôlement sur matricule, appareil, clé publique et expiration ; clé publique épinglée dans le client | Empêche un serveur compromis d'ajouter un faux membre (REQ-SEC-006) | Assemblage de primitives standard, pas un nouveau protocole ; à justifier face à C-01 (R-04). Alternative : attestation des clés d’identité Olm |
 | ADR-12 | La **capacité de parrainage** se déduit du **poste officiel**, et **aucune contrainte de ministère ni de périmètre** n'est appliquée à la validation d'une demande de groupe | Le contrôle tient au poste et à la traçabilité, pas à une frontière géographique ; l'interministériel devient un cas ordinaire | Un parrain habilité valide pour tout agent actif : le rayon d'action est large, la matrice des postes et l'audit de chaque validation sont la seule barrière (R-11) |
 | ADR-13 | **Gestion de groupe** partagée entre le **créateur** et le **parrain** : membres, nom, co-parrains, suppression ; départ volontaire, suspension et reprise ; un groupe sans parrain est gelé | Parité avec les usages attendus d'une messagerie de groupe, sans donner à l'administration de prise sur les conversations | Le **nom du groupe n'est pas stocké en clair côté serveur** : il voyage dans les messages chiffrés (REQ-GRP-006), au prix d'un renommage qui coûte un message. Lien d'invitation public, icône de groupe et restriction d'envoi sont hors périmètre |
 | ADR-14 | **Amorçage** : le premier compte Administrateur est créé par une **commande d'amorçage** sur installation vierge, mot de passe provisoire à changer à la première connexion (REQ-OPS-012) | Une installation vierge n'a aucun utilisateur existant pour pré-inscrire ; l'auto-enrôlement serait une porte ouverte permanente | La commande doit être refusée dès qu'un Administrateur existe ; test T-070 |
 | ADR-15 | **Code d'activation par e-mail professionnel, 24 h** (REQ-ID-002 ; le code à usage unique devient une ligne `CODE_ACTIVATION` hachée) | Alternative plus légère que la remise en main propre, allège l'Administrateur ; la compromission de la boîte professionnelle reste limitée par le TOTP et le secret personnel | Si la boîte est compromise avant l'activation, l'attaquant doit encore vaincre le second facteur ; l'e-mail ne sert qu'au premier enrôlement, jamais à la récupération (REQ-ID-009) |
 | ADR-16 | Le second facteur est récupéré **par l'Administrateur** (révocation puis nouvel enrôlement) ; **aucun code de secours en libre-service** (REQ-ID-009) | Un canal e-mail de secours compromettrait le compte sans le second facteur | La perte d'appareil exige un passage par l'Administrateur, goulot assumé pour une institution |
 | ADR-17 | **Aucune suppression définitive de compte** (REQ-OPS-013) : un compte révoqué reste en base comme trace ; seul le contenu chiffré serveur est purgé à 30 jours ; journaux d'audit conservés 90 jours | Cohérent avec la revocabilité et la journalisation ; évite tout débat sur la purge de l'identité | Face au quota : la base d'agents ne décroît jamais, mais la purge des contenus limite le volume |
-| ADR-18 | Périmètre du hackathon : **tout le P0 d'abord, l'intégralité du P1 ensuite**, aucun P2 | Le socle de sécurité est démontré entièrement avant toute extension | Si le temps manque, on retire les P1 un à un, jamais les éléments de socle (R-07) |
+| ADR-18 | Ordre de mise en œuvre de la version initiale : **tout le P0 d'abord, l'intégralité du P1 ensuite**, aucun P2 | Le socle de sécurité est livré entièrement avant toute extension | Si l'échéance manque, on retire les P1 un à un, jamais les éléments de socle (R-07) |
 
 ## 4. Protocoles clés
 
-**Activation.** L'Administrateur pré-inscrit l'agent ; le serveur génère un secret TOTP et un code d'activation à usage unique, envoyé sur l'adresse professionnelle de l'agent et expiré 24 h après l'envoi (REQ-ID-002). L'agent saisit matricule et code, choisit son secret personnel (haché côté serveur) et enregistre le TOTP. Le navigateur crée sa paire de clés, dépose ses KeyPackages et reçoit son attestation. En exploitation, un compte Administrateur est créé par la commande d'amorçage (REQ-OPS-012) ; une installation vierge n'est utilisable qu'après cet appel.
+**Activation.** L'Administrateur pré-inscrit l'agent ; le serveur génère un secret TOTP et un code d'activation à usage unique, envoyé sur l'adresse professionnelle de l'agent et expiré 24 h après l'envoi (REQ-ID-002). L'agent saisit matricule et code, choisit son secret personnel (haché côté serveur) et enregistre le TOTP. Le navigateur crée ses clés d’identité Olm Curve25519/Ed25519 et publie uniquement les clés publiques et pré-clés Olm signées ; les clés privées restent sur l’appareil. En exploitation, un compte Administrateur est créé par la commande d'amorçage (REQ-OPS-012) ; une installation vierge n'est utilisable qu'après cet appel.
 
 **Connexion.** Secret personnel + code TOTP. Une nouvelle session ferme l'ancienne. Le jeton n'est pas transmis dans l'adresse de la connexion temps réel (elle serait journalisée) mais dans le premier message.
 
-**Messages et fichiers.** Voir M-04 (`05`). Les fichiers sont chiffrés en AES-GCM avec une clé aléatoire, transférés à MinIO, et la clé voyage dans un message MLS.
+**Messages et fichiers.** Voir M-04 (`05`). Les fichiers sont chiffrés en AES-GCM avec une clé aléatoire, transférés à MinIO, et la clé voyage dans un message Megolm.
 
 **Présence.** Signal toutes les 15 secondes ; clé Redis `presence:<agent>` avec expiration à 40 secondes ; publication d'un changement aux instances concernées ; visible des seuls interlocuteurs (REQ-DIR-002 à 005).
 
-**Révocation.** Voir M-06 (`05`) : liste noire dans Redis et fermeture de la connexion (5 s au plus), puis avis aux membres et retrait MLS, avec suivi d'état par groupe.
+**Révocation.** Voir M-06 (`05`) : liste noire dans Redis et fermeture de la connexion (5 s au plus), puis avis aux membres et rotation Megolm, avec suivi d'état par groupe.
 
-**Groupes.** Un agent dont le poste confère le parrainage crée le groupe et en devient parrain ; sinon il adresse une demande, que valide un parrain habilité — sans égard au ministère ni au périmètre. Le groupe n'existe qu'après validation. Créateur et parrain gèrent ensuite les membres, le nom et les co-parrains : chaque changement de membres produit un commit MLS, le renommage passe par un message chiffré, et un groupe qui perd son dernier parrain est gelé.
+**Groupes.** Un agent dont le poste confère le parrainage crée le groupe et en devient parrain ; sinon il adresse une demande, que valide un parrain habilité — sans égard au ministère ni au périmètre. Le groupe n'existe qu'après validation. Créateur et parrain gèrent ensuite les membres, le nom et les co-parrains : chaque changement de membres déclenche une nouvelle génération, la rotation de session Megolm et un partage sécurisé de la nouvelle clé via Olm (flux intégré au code, à valider entre navigateurs avant activation en production), le renommage passe par un message chiffré, et un groupe qui perd son dernier parrain est gelé.
 
 **Classification.** Le niveau est un champ du message chiffré ; le client applique les restrictions et l'expiration (M-08).
 
@@ -80,14 +83,14 @@ Ce document choisit les technologies **après** les composants (`04_transition_r
 
 Coût de la présence : à 15 s, 500 agents produisent environ 33 signaux par seconde, 5 000 agents environ 333. L'intervalle de 4 secondes du document initial aurait donné 1 250 par seconde à 5 000 agents, au détriment des réseaux lents.
 
-L'API est sans état (REQ-OPS-006) ; l'ordre des messages est tenu par un numéro de séquence par groupe attribué en transaction ; un seul commit par epoch est accepté (`409` sinon).
+L'API est sans état (REQ-OPS-006) ; l'ordre des messages est tenu par un numéro de séquence par groupe attribué en transaction ; une seule génération cryptographique attendue est accepté (`409` sinon).
 
 ## 6. Écarts avec le document d'architecture initial
 
 | Point initial | Décision retenue | Raison |
 |---|---|---|
 | Clés dans `sessionStorage` et `localStorage` | IndexedDB + clé WebCrypto non extractible | Réduire l'exposition des clés |
-| Révocation = coupure + vidage du navigateur | Coupure serveur **et** retrait cryptographique MLS ; effacement local en simple tentative | Un navigateur peut empêcher l'effacement |
+| Révocation = coupure + vidage du navigateur | Coupure serveur **et** retrait cryptographique Megolm par rotation de session ; effacement local en simple tentative | Un navigateur peut empêcher l'effacement |
 | Présence toutes les 4 s, visible de tous | Toutes les 15 s, visible des seuls interlocuteurs | Bande passante et métadonnées |
 | « Distribué » via un accusé binaire entre clients | Information du serveur, non probante | Un accusé non signé est falsifiable |
 | « Lu » à « valeur légale » | Preuve technique, valeur légale non affirmée | Nécessite un avis juridique |
@@ -105,7 +108,7 @@ Deux couches : Caddy limite les connexions par adresse IP ; Fastify applique des
 | Connexion | IP | 5 / min |
 | Code TOTP erroné | compte | 5 échecs, puis verrouillage 15 min |
 | Envoi de message | session | 60 / min |
-| Récupération de KeyPackages | demandeur | 30 / min |
+| Récupération de pré-clés Olm | demandeur | 30 / min |
 | Opérations d'administration | Administrateur | 30 / min |
 | Message | taille | 64 Ko au plus |
 | Pièce jointe | taille | 25 Mo au plus |
@@ -125,7 +128,7 @@ Réponse : `429` avec `Retry-After`, sans détail interne ; le client attend ave
 | Annuaire (recherche) | Redis | 60 s | Invalidé à chaque modification |
 
 **Jamais en cache** : contenu des messages, secrets TOTP, secrets personnels.
-**Côté client** : MLS détruit les clés de déchiffrement après usage ; le client garde donc le texte clair dans sa base locale chiffrée (REQ-MSG-004), purgée selon la classification.
+**Côté client** : Megolm fait avancer un ratchet de message ; la conservation des états entrants doit être gérée par l’application ; le client garde donc le texte clair dans sa base locale chiffrée (REQ-MSG-004), purgée selon la classification.
 
 ## 9. Métadonnées visibles par le serveur
 
@@ -160,7 +163,7 @@ volumes: { pgdata: {}, objets: {} }
 
 | ID | Risque | Impact | Mesure |
 |---|---|---|---|
-| R-01 | OpenMLS en WebAssembly ne fonctionne pas, **sans plan B** (décision de l'équipe) | Critique : sans chiffrement de bout en bout, le projet est éliminé | Faire ce prototype en premier ; un signal d'échec tardif ne laisse aucune marge |
+| R-01 | Megolm via libolm WebAssembly n’est pas chargé ou ne fonctionne pas, **sans plan B** (décision de l'équipe) | Critique : sans chiffrement de bout en bout, le projet est éliminé | Faire ce prototype en premier ; un signal d'échec tardif ne laisse aucune marge |
 | R-02 | Clés dans le navigateur exposées à un script injecté | Élevé | Politique de contenu, aucun script tiers, intégrité, clé non extractible ; limite assumée |
 | R-03 | Licences de Redis et MinIO | Moyen | Relecture avant dépôt ; Valkey ou volume de fichiers en repli |
 | R-04 | L'attestation d'enrôlement jugée « cryptographie maison » | Élevé (élimination) | Justifier : signature standard, aucun protocole nouveau ; sinon credentials X.509 |
@@ -171,3 +174,18 @@ volumes: { pgdata: {}, objets: {} }
 | R-09 | Compatibilité Fastify, WebSocket et BullMQ avec le runtime retenu | Moyen | Node.js LTS ; test d'intégration dès le début |
 | R-10 | Perte de l'historique en cas de changement de navigateur | Faible | Assumé (appareil unique) |
 | R-11 | Parrainage sans contrainte de périmètre : un parrain habilité peut créer un groupe réunissant des agents de tout ministère | Moyen | Matrice des postes stricte (7 postes habilités sur 13) ; chaque validation est auditée avec l'identité du parrain (REQ-AUD-001) ; limite annoncée |
+
+
+## 11. ADR-19 — Protocole de chiffrement de groupe (Olm + Megolm)
+
+**Statut : adopté pour le périmètre mono-appareil ; référence normative unique pour le chiffrement des groupes.** Le détail du protocole (publication de clés, distribution, rotation) est dans `13_protocole_olm_megolm.md`.
+
+- **Protocole de groupe :** Megolm `m.megolm.v1.aes-sha2`, implémenté par libolm WebAssembly. Chaque agent possède un unique appareil enrôlé, avec une session sortante par groupe ; les agents destinataires conservent leurs sessions entrantes.
+- **Relais et enveloppes :** le client publie une identité Curve25519/Ed25519 signée et des pré-clés signées ; le backend vérifie les signatures et attribue atomiquement une pré-clé par couple émetteur/destinataire. La clé Megolm est ensuite chiffrée individuellement dans une session Olm et relayée comme `megolm_key_share`. Il est interdit de publier une clé Megolm en clair dans PostgreSQL, WebSocket ou API.
+- **Stockage :** pickles libolm et clé de pickle enveloppés par AES-GCM avec une clé WebCrypto non extractible stockée dans IndexedDB. Les clés de session et états cryptographiques ne quittent jamais l'appareil sauf enveloppés par Olm.
+- **Rotation :** nouvelle session au plus tard après 100 messages ou 7 jours, et obligatoirement après retrait d'un membre ou changement de périmètre. Une clé de nouvelle session n'est distribuée qu'aux appareils encore autorisés.
+- **Limites assumées :** Megolm ne fournit pas à lui seul de forward secrecy parfaite, de post-compromise security ni de cohérence de transcript. La rotation, l'anti-rejeu par index et la validation de l'identité/session de l'émetteur sont obligatoires. Le client épingle actuellement les identités en TOFU ; une vérification hors bande reste à construire.
+- **Révocation :** coupure serveur immédiate inchangée ; chaque agent restant démarre/reçoit une nouvelle session Megolm sur son appareil unique à l'événement de changement ou à la prochaine ouverture du groupe. L'ancien membre ne reçoit pas la nouvelle clé. La révocation cryptographique n'est « terminée » qu'après démonstration des rotations et distributions exigées par le SRS.
+- **Compatibilité des identifiants :** le champ `epoch` de l'API est un compteur de génération cryptographique propre à Goama ; il ne fait pas partie du protocole Megolm.
+
+**Motif :** Megolm/Olm offrent des primitives éprouvées, déployées à grande échelle par Matrix, et permettent au serveur de rester aveugle sans détenir les clés de groupe. Le paquet `@matrix-org/olm` 3.2.15 est l'ancienne génération libolm ; la mise à niveau vers `@matrix-org/matrix-sdk-crypto-wasm` (Vodozemac) est inscrite à la feuille de route de maintenance avant tout déploiement de production. La spécification Megolm impose un canal de partage sécurisé, recommande le suivi des indices contre les rejeux et exige la rotation des sessions pour limiter les conséquences d'une compromission. Voir la spécification Matrix et les notes de sécurité ci-dessous.

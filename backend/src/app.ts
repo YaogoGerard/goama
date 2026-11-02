@@ -82,7 +82,7 @@ export async function construireApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, {
-    origin: config.CORS_ORIGIN === "true" ? true : config.CORS_ORIGIN,
+    origin: config.CORS_ORIGIN === "true" ? true : config.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean),
   });
 
   await app.register(rateLimit, {
@@ -101,7 +101,7 @@ export async function construireApp(): Promise<FastifyInstance> {
 
   await app.register(jwt, { secret: config.JWT_SECRET });
 
-  await app.register(websocket, { options: { maxPayload: 1024 * 1024 } });
+  await app.register(websocket, { options: { maxPayload: 64 * 1024, perMessageDeflate: false } });
 
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
 

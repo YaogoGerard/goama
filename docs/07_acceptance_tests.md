@@ -43,15 +43,15 @@
 | T-037 | Ouvrir un message Confidentiel | Filigrane avec le nom du destinataire | REQ-CLS-004 | M |
 | T-038 | **Révocation** : l'Administrateur révoque un membre pendant une conversation de groupe | Session invalidée ; connexion fermée et requêtes refusées en 5 s au plus | REQ-REV-001, REQ-REV-002 | A |
 | T-039 | Révoquer un agent alors que des messages sont encore en file pour lui | Aucun message ne lui est livré après la révocation | REQ-REV-003 | A |
-| T-040 | Après révocation, un membre en ligne reçoit l'avis ; envoyer un message au groupe | Retrait cryptographique émis ; nouvelle clé de groupe ; le révoqué ne peut pas déchiffrer | REQ-REV-004 | A |
-| T-041 | Révoquer alors qu'aucun autre membre n'est en ligne | État « retrait en attente » visible au tableau de bord ; retrait émis à la première reconnexion | REQ-REV-005, REQ-REV-006 | M |
+| T-040 | Après révocation, un membre en ligne reçoit l'avis ; envoyer un message au groupe | Nouvelle session Megolm créée et clé distribuée par Olm aux appareils restants ; le révoqué ne peut pas déchiffrer | REQ-REV-004 | A |
+| T-041 | Révoquer alors qu'aucun autre membre n'est en ligne | État « retrait en attente » visible au tableau de bord ; rotation et partage Olm effectués à la première reconnexion d’un appareil autorisé | REQ-REV-005, REQ-REV-006 | M |
 | T-042 | Observer le navigateur révoqué ; observer le groupe | Tentative d'effacement local ; les membres sont informés du retrait | REQ-REV-007, REQ-REV-008 | M |
 | T-043 | **Intrus** : un agent non enrôlé tente de rejoindre un groupe ; un client reçoit un ajout sans attestation valide | Refus serveur et refus client ; événement journalisé | REQ-SEC-006 | A |
 | T-044 | Pré-inscrire, activer, révoquer, échouer 5 connexions ; inspecter journaux d'audit et journaux techniques | Tous les événements présents ; aucun texte, fichier, secret ni clé | REQ-AUD-001, REQ-AUD-002 | A |
 | T-045 | Lire le journal avec un agent ; avancer l'horloge de 91 jours | Agent refusé ; entrées de plus de 90 jours purgées | REQ-AUD-003, REQ-AUD-004 | A |
 | T-046 | 6 tentatives de connexion en 1 min depuis une IP | La 6e : 429 avec Retry-After, sans détail interne | REQ-ABUSE-001, REQ-ABUSE-004 | A |
-| T-047 | 61 messages en 1 min ; 31 demandes de KeyPackages ; 31 opérations d'administration ; 2 instances de l'API | Dépassements refusés (429) ; compteurs cumulés sur les deux instances | REQ-ABUSE-002, REQ-ABUSE-003, REQ-ABUSE-006, REQ-ABUSE-007 | A |
-| T-048 | Lister les suites annoncées dans les KeyPackages | Seule la suite 0x0001 | REQ-SEC-001 | A |
+| T-047 | 61 messages en 1 min ; 31 demandes de clé de session Megolm ; 31 opérations d'administration ; 2 instances de l'API | Dépassements refusés (429) ; compteurs cumulés sur les deux instances | REQ-ABUSE-002, REQ-ABUSE-003, REQ-ABUSE-006, REQ-ABUSE-007 | A |
+| T-048 | Vérifier le protocole et la distribution de clés | Megolm `m.megolm.v1.aes-sha2` + partage de clé via Olm authentifié ; aucune clé brute côté serveur | REQ-SEC-001 | A |
 | T-049 | Connexion en clair puis en TLS 1.1 | Refusée | REQ-SEC-005 | A |
 | T-050 | Comparer la liste des métadonnées documentée (`06_architecture_decisions.md` §9) avec la base, Redis et les journaux | Aucune métadonnée non documentée | REQ-SEC-008 | M |
 | T-051 | Examiner les en-têtes HTTP, les scripts chargés, l'empreinte du fichier WebAssembly | Politique de contenu stricte ; aucun script tiers ; intégrité contrôlée | REQ-SEC-009, REQ-SEC-012 | A |
@@ -69,36 +69,13 @@
 | T-063 | Un agent sans capacité de parrainage soumet une demande ; un parrain la valide | Le groupe n'existe qu'après validation ; le parrain en est membre avec le rôle de parrain | REQ-GRP-001, REQ-GRP-003 | A |
 | T-064 | Un parrain d'un autre ministère valide la demande d'un agent | Validation acceptée ; groupe interministériel créé ; validation auditée avec l'identité du parrain | REQ-GRP-002 | A |
 | T-065 | Un agent sans capacité de parrainage tente de créer un groupe directement, puis de valider une demande | Les deux refusés ; seul le chemin de la demande lui est ouvert | REQ-AUTHZ-005, REQ-AUTHZ-006 | A |
-| T-066 | Le créateur puis le parrain ajoutent et retirent des membres, renomment, promeuvent un co-parrain, suppriment le groupe | Chaque changement de membres produit un nouveau commit MLS et un nouvel epoch ; les deux rôles disposent des mêmes capacités | REQ-GRP-004 | A |
+| T-066 | Le créateur puis le parrain ajoutent et retirent des membres, renomment, promeuvent un co-parrain, suppriment le groupe | Chaque changement de membres déclenche une rotation Megolm et un partage Olm sécurisé ; le compteur de génération Goama est incrémenté ; les deux rôles disposent des mêmes capacités | REQ-GRP-004 | A |
 | T-067 | Renommer un groupe, puis inspecter PostgreSQL, Redis et les journaux | Le nom n'apparaît nulle part en clair côté serveur | REQ-GRP-006 | A |
-| T-068 | Un membre quitte ; le parrain suspend puis reprend ; le dernier parrain quitte | Départ effectif par commit MLS ; publications gelées puis rétablies ; groupe gelé et signalé au tableau de bord | REQ-GRP-007, REQ-GRP-008, REQ-GRP-009 | M |
+| T-068 | Un membre quitte ; le parrain suspend puis reprend ; le dernier parrain quitte | Départ effectif par rotation Megolm ; publications gelées puis rétablies ; groupe gelé et signalé au tableau de bord | REQ-GRP-007, REQ-GRP-008, REQ-GRP-009 | M |
 | T-069 | L'Administrateur cherche une opération de groupe dans le tableau de bord | Aucune opération de groupe n'est proposée ni acceptée | REQ-GRP-005 | A |
 | T-070 | Sur une installation vierge, lancer la commande d'amorçage, puis la relancer | Le premier Administrateur existe avec un mot de passe provisoire ; le second appel est refusé | REQ-OPS-012 | A |
 | T-071 | Chercher dans le tableau de bord et dans l'API une opération de suppression définitive de compte ; révoquer un agent et relire son annuaire | Aucune opération de suppression n'existe ; le compte révoqué reste consultable avec son statut | REQ-OPS-013 | A |
 | T-072 | Se déconnecter volontairement puis se reconnecter avec les mêmes identifiants sur le même appareil ; attendre l'expiration de session (12 h) et se reconnecter | Reconnexion acceptée dans les deux cas, sans intervention administrative ; l'appareil reste enrôlé et le compte actif | REQ-ID-010 | A |
-
-## Épreuves du jury → tests à répéter
-
-| Épreuve | Tests |
-|---|---|
-| Le serveur ne lit rien | T-015 |
-| Parrainage d'un groupe | T-063, T-064, T-065 |
-| Révocation pendant une conversation de groupe | T-038, T-040 |
-| Intrus | T-001, T-043 |
-| Innovation | T-025, T-026 (accusé de lecture) ; T-030 à T-032 (présence, annuaire) ; T-034 à T-036 (classification) |
-| Explication du code | Répétition orale : chaque membre explique le chiffrement d'un message, la vérification de l'attestation, la vérification d'un accusé de lecture et la vérification TOTP |
-
-## Vérification des contraintes du hackathon
-
-| Contrainte | Vérification | Statut |
-|---|---|---|
-| C-01, C-02 | T-015, T-046 à T-048 ; revue de code des appels cryptographiques (uniquement OpenMLS et primitives standard) | |
-| C-03 | T-055 ; coupure du réseau sortant : le système fonctionne | |
-| C-07 | LICENSE présent ; liste des technologies avec licences et liens ; licences Redis et MinIO relues | |
-| C-08 | Aucune donnée réelle dans le dépôt ni dans les captures | |
-| C-09 | Historique des commits progressifs ; README en français, 2 pages au plus ; comptes de démonstration fonctionnels | |
-| C-10 | Notes de 2 pages au plus ; vidéo de 3 minutes au plus montrant échange chiffré, révocation et innovation | |
-| C-11 | Répétition d'entretien par chaque membre | |
 
 ## Matrice de couverture (générée et vérifiée)
 

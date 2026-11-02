@@ -90,7 +90,7 @@ CREATE TABLE "Message" (
     "senderId" TEXT NOT NULL,
     "seq" INTEGER NOT NULL,
     "epoch" INTEGER NOT NULL,
-    "kind" TEXT NOT NULL DEFAULT 'mls_app',
+    "kind" TEXT NOT NULL DEFAULT 'megolm_app',
     "content" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

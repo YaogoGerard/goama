@@ -43,6 +43,12 @@ enum RoleMembre {
   MEMBRE
 }
 
+enum StatutDemandeGroupe {
+  EN_ATTENTE
+  APPROUVEE
+  REJETEE
+}
+
 // --- Identité ---------------------------------------------------------
 
 model Agent {
@@ -67,7 +73,9 @@ model Agent {
   enrollmentAuthorizations EnrollmentAuthorization[]
   keyPackages    KeyPackage[]
   memberships    GroupMember[]
-  messages       Message[]
+  demandesGroupes          GroupRequest[] @relation("DemandeurGroupe")
+  parrainagesGroupes       GroupRequest[] @relation("ParrainGroupe")
+  messages                 Message[]
   codeActivation CodeActivation? // code d'activation courant (un seul par agent)
   retraits       RetraitCryptographique[]
 }
@@ -148,15 +156,37 @@ model Session {
 
 model Group {
   id        String   @id @default(uuid())
-  epoch     Int      @default(0) // état MLS du groupe : un commit par epoch, sinon 409
+  epoch     Int      @default(0) // compteur de génération cryptographique Goama (pas une epoch de protocole)
   createdBy String // id de l'agent créateur (devient parrain)
   createdAt DateTime @default(now())
 
   members  GroupMember[]
   messages Message[]
+  demandes GroupRequest[]
 
   // AUCUN champ « nom » : le nom du groupe voyage chiffré dans un message
   // de type « nom_groupe » (REQ-GRP-006). L'inspection de cette table ne révèle rien.
+}
+
+model GroupRequest {
+  id         String               @id @default(uuid())
+  demandeurId String
+  parrainId   String
+  groupeId   String?
+  statut     StatutDemandeGroupe @default(EN_ATTENTE)
+  // Nom et membres choisis par le demandeur (visibles au parrain avant
+  // approbation) ; le groupe lui-même applique le nom chiffré (REQ-GRP-006).
+  nomRequest     String?            
+  membresRequest String[]           @default([])
+  createdAt  DateTime             @default(now())
+  decidedAt  DateTime?
+
+  demandeur Agent  @relation("DemandeurGroupe", fields: [demandeurId], references: [id])
+  parrain   Agent  @relation("ParrainGroupe", fields: [parrainId], references: [id])
+  groupe    Group? @relation(fields: [groupeId], references: [id])
+
+  @@index([parrainId, statut])
+  @@index([demandeurId, statut])
 }
 
 model GroupMember {
@@ -172,13 +202,13 @@ model GroupMember {
   @@index([groupeId])
 }
 
-// KeyPackage MLS (RFC 9420) sérialisé : le serveur le stocke et le relaie
-// SANS pouvoir le comprendre. C'est le carnet d'adresses cryptographique.
+// Paquet public Olm du mono-appareil : identité publique signée + pré-clés
+// Curve25519 signées et non consommées. Aucune clé privée n’est stockée ici.
 model KeyPackage {
   id        String   @id @default(uuid())
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id])
-  payload   String // base64 — OPAQUE pour le serveur
+  payload   String // JSON public signé (identité + OTK) ; aucune clé privée
   createdAt DateTime @default(now())
 
   @@index([agentId])
@@ -192,7 +222,7 @@ model Message {
   sender    Agent    @relation(fields: [senderId], references: [id])
   seq       Int // numéro de séquence PAR GROUPE, attribué en transaction (garantie d'ordre)
   epoch     Int // epoch déclaré par le client, comparé à Groupe.epoch
-  kind      String   @default("mls_app") // mls_app | mls_commit | recu_lu | nom_groupe | media_cle
+  kind      String   @default("megolm_app") // megolm_app | megolm_key_share | recu_lu | nom_groupe | media_cle
   content   String // blob chiffré base64 — le serveur NE PEUT PAS le lire
   createdAt DateTime @default(now())
 
@@ -203,7 +233,7 @@ model Message {
 // --- Fichiers chiffrés ------------------------------------------------
 
 // Seul le BLOB chiffré est stocké (volume Docker, repli MinIO du sprint).
-// La clé AES-GCM du fichier voyage dans un message MLS « media_cle » :
+// La clé AES-GCM du fichier voyage dans un message Megolm « media_cle » :
 // le serveur n'a donc jamais accès ni au contenu ni à la clé.
 model MediaObject {
   id          String   @id @default(uuid())

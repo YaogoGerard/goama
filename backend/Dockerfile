@@ -1,7 +1,7 @@
 # Image multi-étapes : le build compile TypeScript, l'image finale est légère.
 FROM node:22-alpine AS build
 WORKDIR /app
-ENV DATABASE_URL=postgresql://goama:goama@db:5432/goama
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 COPY package.json package-lock.json ./
 RUN npm config set fetch-retries 5 \
     && npm config set fetch-retry-factor 2 \

@@ -1,87 +1,38 @@
-# Goama — Backend (sprint pré-hackathon 2026)
+# Goama — backend
 
-Backend de la **messagerie administrative souveraine, chiffrée de bout en bout**
-(Hackathon 226 — MTDPCE/DGTD, Burkina Faso). Ce dépôt est la partie serveur : un
-**relais aveugle** qui authentifie des agents enrôlés, relaie des blobs chiffrés MLS
-et applique l'ordre des messages — **sans jamais pouvoir lire le contenu**.
+API Fastify 5 / TypeScript / Prisma 7 / PostgreSQL 17. Le serveur est un relais aveugle : il authentifie les agents, contrôle les rôles et conserve des objets chiffrés sans détenir les clés de conversation.
 
-> 📘 **Lisez [`EXPLICATIONS.md`](EXPLICATIONS.md)** : chaque mécanisme de sécurité
-> expliqué, la fiche de préparation aux épreuves du jury et les limites connues.
+## Chiffrement de groupe
 
-## Architecture
+Le protocole retenu est **Olm + Megolm** (ADR-19, `../docs/06_architecture_decisions.md`). Le backend :
 
-```
-Client Vue 3 + OpenMLS (WASM)  ←→  API Fastify (ce dépôt)  ←→  PostgreSQL
-        E2EE côté client               relais aveugle           blobs opaques
-```
+- vérifie les signatures Ed25519 des paquets de clés publiques publiés (`POST /devices/olm-keys`) et las stocke sans clé privée (`KeyPackage.payload`, JSON public) ;
+- attribue atomiquement une pré-clé à usage unique par couple émetteur/destinataire (`POST /groupes/:id/olm-keys`), avec réinitialisation administrative auditable (`DELETE /admin/agents/:agentId/olm-keys`) ;
+- relaye les enveloppes `megolm_app` et `megolm_key_share` comme contenus opaques, ordonnés par séquence et repérés par génération de groupe (`epoch`) ;
 
-- **Authentification forte** : pré-inscription par l'Administrateur, code d'activation
-  à usage unique (24 h, haché), secret personnel (scrypt) + **TOTP** (RFC 6238).
-- **Session unique** : une seule session active par agent ; le JWT pointe vers une
-  session vérifiée en base à chaque requête → **révocation immédiate**.
-- **Ordre total** : numéro de séquence par groupe attribué en transaction
-  (`SELECT … FOR UPDATE`), refus `409` des commits d'epoch périmés.
-- **Révocation en deux temps** (ADR-08) : coupure serveur (sessions + WebSocket) puis
-  retrait cryptographique MLS émis par les clients.
-- **Minimisation** : aucun contenu en clair en base ; pas de nom de groupe côté
-  serveur (il voyage chiffré) ; présence en mémoire, jamais stockée.
-- **Aucune cryptographie maison** : primitives standard Node.js, `otpauth`,
-  `@fastify/jwt`, et **OpenMLS (RFC 9420)** côté client.
+Le serveur ne doit jamais recevoir de clé Megolm brute ni de clé privée Olm. La rotation des sessions Megolm (100 messages / 7 jours, et après tout changement de membres) est pilotée par le client ; les règles sont détaillées dans `../docs/13_protocole_olm_megolm.md`.
 
-## Technologies et licences
+## Architecture du serveur
 
-| Technologie | Rôle | Licence |
-|---|---|---|
-| [Node.js 22](https://nodejs.org) | exécution | MIT |
-| [Fastify](https://fastify.dev) + `@fastify/jwt`, `@fastify/websocket`, `@fastify/rate-limit`, `@fastify/cors`, `@fastify/multipart` | API, temps réel | MIT |
-| [Prisma ORM](https://www.prisma.io) + `@prisma/adapter-pg` | accès données | Apache-2.0 |
-| [PostgreSQL 17](https://www.postgresql.org) | base | PostgreSQL License |
-| [otpauth](https://github.com/hectorm/otpauth) | TOTP RFC 6238 | MIT |
-| [Zod](https://zod.dev) | validation | MIT |
-| [ws](https://github.com/websockets/ws) | WebSocket | MIT |
-| [TypeScript](https://www.typescriptlang.org), [tsx](https://tsx.is), [Vitest](https://vitest.dev) | outils | Apache-2.0 / MIT |
-| [Docker Compose](https://docs.docker.com/compose/) | déploiement souverain | Apache-2.0 |
-| [OpenMLS](https://openmls.tech) | E2EE (RFC 9420), **côté client** | MIT / Apache-2.0 |
+- **Authentification et sessions** : pré-inscription administrative, activation (code à usage unique + TOTP), connexion à deux facteurs, verrouillage après échecs, session unique par agent vérifiée à chaque requête et à chaque socket, révocation immédiate (sessions, WebSockets 4003, pré-clés, génération de groupe) auditée.
+- **Groupes** : création selon l'habilitation du poste, demandes de groupe adressées à un parrain habilité (validation/rejet co-signés), membres, retraits et départ.
+- **Messages et médias** : enveloppes chiffrées ordonnées, pièces jointes chiffrées (AES-GCM côté client, clé dans le flux Megolm), aucun clair en base.
+- **Administration** : annuaire, statistiques, journal d'audit, autorisations d'enrôlement, réinitialisations cryptographiques.
 
-**Niveau d'engagement : Créer** — application nouvelle reposant sur des bibliothèques
-éprouvées (OpenMLS), conformément aux termes de référence du sprint.
-
-## Installation (une commande)
+## Installation et commandes
 
 ```bash
-docker compose up -d          # PostgreSQL + API : hébergement souverain, sans service tiers
-docker compose exec api npm run db:seed   # comptes de démonstration fictifs
-# (les migrations s'appliquent automatiquement au démarrage)
+npm ci
+cp .env.example .env       # puis renseigner les secrets (voir .env.example)
+npm run db:deploy          # prisma migrate deploy
+npm run build
+npm test                   # vitest, base PostgreSQL requise
 ```
 
-Développement local sans Docker : `npm install`, copier `.env.example` en `.env`,
-puis `npm run db:deploy && npm run bootstrap:admin && npm run dev`.
+À la racine du dépôt, `./setup.sh` génère `backend/.env` automatiquement (secrets PostgreSQL, `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, compte administrateur initial) et lance la stack complète via Docker Compose.
 
-Vérifications : `curl localhost:8080/healthz` · `npm run demo` (flux complet) ·
-`npm test` (12 tests de sécurité : DB sans clair, révocation, intrus — bonus §5).
+Descriptions des variables dans `.env.example` ; les secrets sont exclus du dépôt et chiffrés au repos lorsque le serveur en détient (`TOTP_ENCRYPTION_KEY`).
 
-## Structure
+## Tests
 
-```
-src/
-├── app.ts            # assemblage + gardes de sécurité (requireAuth 3 verrous)
-├── config.ts         # env validées Zod          └── server.ts   # démarrage, purge
-├── lib/              # scrypt, TOTP, validation Zod, erreurs
-├── plugins/          # Prisma (adaptateur pg), journal d'audit
-├── auth/             # enrôlement, activation, TOTP, sessions
-├── messaging/        # groupes, messages (seq/epoch), WebSocket, KeyPackages
-├── agents/           # annuaire, révocation, présence
-├── media/            # blobs de fichiers chiffrés
-└── jobs/             # purge 30 j / audit 90 j
-prisma/               # schéma + migration initiale        tests/  # épreuves du jury en Vitest
-```
-
-## Limites (résumé — détail dans EXPLICATIONS.md §10)
-
-- Clés dans le navigateur : protégées (WebCrypto non extractible, CSP stricte), mais
-  un script injecté pourrait les *utiliser* — limite du client web, assumée.
-- Le serveur voit les métadonnées de graphe (appartenance aux groupes) : nécessaire
-  à la livraison, documentée et réduite (présence en mémoire, ids aléatoires).
-- Sprint : une instance API (présence en mémoire), fichiers sur volume local,
-  BullMQ/Redis/MinIO/Caddy prévus en finale — écarts listés dans EXPLICATIONS.md §9.
-- Secrets et comptes du dépôt **100 % fictifs**, pour la démonstration uniquement.
+`npm test` exécute la suite de contrats sur une base PostgreSQL à la disposition du développeur (voir `tests/setup.ts`) : intrusion/anti-énumération, verrouillage TOTP, révocation immédiate, parrainage et demandes de groupe, stockage opaque, enveloppes Megolm/Olm, signatures Ed25519, chiffrement au repos du TOTP.

@@ -19,9 +19,10 @@ import { createHash } from "node:crypto";
 import { prisma } from "../plugins/db.js";
 import { journaliser } from "../plugins/audit.js";
 import { codeActivationAleatoire, hasherSecret, verifierSecret, scryptFactice } from "../lib/crypto.js";
-import { genererSecretTotp, uriTotp, verifierCodeTotp } from "../lib/totp.js";
+import { chiffrerSecretTotp, dechiffrerSecretTotp, estSecretTotpChiffre, genererSecretTotp, uriTotp, verifierCodeTotp } from "../lib/totp.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { config } from "../config.js";
+import { relais } from "../messaging/relay.js";
 import type { PayloadJeton, RoleApp } from "../types.js";
 
 // Constantes de la politique de verrouillage (REQ-ID-005)
@@ -79,6 +80,7 @@ export async function reinitialiserAccesAgent(agentId: string, adminId: string) 
       create: { agentId, codeHash: createHash("sha256").update(codeClair).digest("hex"), expiresAt: dansUnNombreHeures(config.ACTIVATION_TTL_H) },
     }),
   ]);
+  relais.fermerAgent(agentId, 4003);
   await journaliser(adminId, "reinitialisation_acces", agent.matricule);
   return { agentId, codeActivation: codeClair };
 }
@@ -103,7 +105,7 @@ export async function activer(donnees: { matricule: string; code: string; secret
   await prisma.$transaction([
     prisma.agent.update({
       where: { id: agent.id },
-      data: { statut: "ACTIF", secretHash: hasherSecret(donnees.secret), totpSecret },
+      data: { statut: "ACTIF", secretHash: hasherSecret(donnees.secret), totpSecret: chiffrerSecretTotp(totpSecret) },
     }),
     prisma.codeActivation.update({ where: { id: code.id }, data: { usedAt: new Date() } }),
   ]);
@@ -146,9 +148,15 @@ export async function connecter(
 
   // Vérification du second facteur (TOTP) — fait même si verrouillé pour
   // ne pas court-circuiter le timing, mais le résultat est ignoré si verrouillé.
-  const totpOk = agent.totpSecret
-    ? verifierCodeTotp(agent.totpSecret, agent.matricule, donnees.codeTotp)
-    : false;
+  let totpOk = false;
+  if (agent.totpSecret) {
+    try {
+      totpOk = verifierCodeTotp(dechiffrerSecretTotp(agent.totpSecret), agent.matricule, donnees.codeTotp);
+    } catch {
+      // Secret illisible ou clé de chiffrement erronée : refus fermé.
+      totpOk = false;
+    }
+  }
   const demoTotpBypass =
     config.DEMO_AUTH_BYPASS_TOTP &&
     config.NODE_ENV !== "production" &&
@@ -173,28 +181,37 @@ export async function connecter(
       },
     });
 
-    if (demoTotpBypass) {
-      await journaliser(agent.id, "connexion_demo_sans_totp");
-    }
     await journaliser(agent.id, nouvelles >= MAX_TENTATIVES ? "compte_verrouille" : "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }
 
-  // Succès : réinitialiser le compteur de tentatives et le verrou
-  await prisma.agent.update({
-    where: { id: agent.id },
-    data: { tentativesConnexion: 0, verrouilleJusqua: null },
+  // Succès : sérialiser les connexions concurrentes sur la ligne Agent.
+  // Sans verrou, deux logins simultanés pourraient chacun créer une session
+  // active et violer la politique mono-appareil.
+  const session = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
+    await tx.agent.update({
+      where: { id: agent.id },
+      data: {
+        tentativesConnexion: 0,
+        verrouilleJusqua: null,
+        // Migration transparente des secrets historiques en clair après preuve
+        // de possession du second facteur.
+        ...(agent.totpSecret && !estSecretTotpChiffre(agent.totpSecret)
+          ? { totpSecret: chiffrerSecretTotp(agent.totpSecret) }
+          : {}),
+      },
+    });
+    await tx.session.updateMany({
+      where: { agentId: agent.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return tx.session.create({
+      data: { agentId: agent.id, expiresAt: dansUnNombreHeures(12) },
+    });
   });
-
-  // Session unique : fermeture de toutes les sessions actives précédentes
-  await prisma.session.updateMany({
-    where: { agentId: agent.id, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
-
-  const session = await prisma.session.create({
-    data: { agentId: agent.id, expiresAt: dansUnNombreHeures(12) },
-  });
+  // Fermer sans délai la socket de l'ancienne session avant de rendre le jeton.
+  relais.fermerAgent(agent.id, 4001);
   // Le JWT porte jti = id de session : la garde interroge CETTE session en
   // base, donc une révocation est effective IMMÉDIATEMENT (épreuve du jury).
   const jeton = signer({ sub: agent.id, jti: session.id, role: agent.role as RoleApp });
@@ -204,8 +221,10 @@ export async function connecter(
 
 // 4) Déconnexion volontaire : révoque la session courante
 export async function deconnecter(sessionId: string) {
+  const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { agentId: true } });
   await prisma.session.updateMany({
     where: { id: sessionId, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+  if (session) relais.fermerAgent(session.agentId, 4001);
 }

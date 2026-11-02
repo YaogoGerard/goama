@@ -1,7 +1,7 @@
 {
   "name": "goama-backend",
   "version": "0.1.0",
-  "description": "Backend Goama — messagerie administrative souveraine (sprint pré-hackathon 2026)",
+  "description": "Goama — messagerie administrative souveraine et chiffrée de bout en bout (backend)",
   "main": "dist/server.js",
   "directories": {
     "test": "tests"

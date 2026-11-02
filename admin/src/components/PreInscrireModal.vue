@@ -20,7 +20,7 @@ const form = reactive({
 const loading = ref(false);
 const error = ref<string | null>(null);
 const result = ref<PreInscriptionResult | null>(null);
-const copied = ref(false);
+const linkCopied = ref(false);
 
 const referenceData = ref<ReferenceData>({ categories: [], ministeres: [], postes: [] });
 const loadingReferenceData = ref(true);
@@ -64,14 +64,18 @@ async function submitPreInscription() {
   }
 }
 
-function copyCode() {
-  if (result.value?.codeActivation) {
-    navigator.clipboard.writeText(result.value.codeActivation);
-    copied.value = true;
-    setTimeout(() => {
-      copied.value = false;
-    }, 2500);
-  }
+function activationLink() {
+  if (!result.value) return "";
+  const base = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
+  return `${base}/activation#matricule=${encodeURIComponent(form.matricule.trim().toUpperCase())}&code=${encodeURIComponent(result.value.codeActivation)}`;
+}
+
+async function copyActivationLink() {
+  await navigator.clipboard.writeText(activationLink());
+  linkCopied.value = true;
+  setTimeout(() => {
+    linkCopied.value = false;
+  }, 2500);
 }
 </script>
 
@@ -86,23 +90,21 @@ function copyCode() {
         <button class="icon close-btn" type="button" @click="emit('close')">✕</button>
       </div>
 
-      <!-- Résultat avec Code d'activation -->
+      <!-- Résultat avec lien d'activation -->
       <div v-show="result" class="activation-result">
         <div class="result-badge">✓ Agent pré-inscrit avec succès</div>
-        <p class="result-desc">
-          Transmettez ce code d'activation à usage unique à l'agent (par e-mail officiel ou en main propre).
-        </p>
+        <p class="result-desc">Transmettez ce lien à l’agent. Il ouvrira directement son parcours d’activation.</p>
 
         <div class="code-box">
-          <div class="code-label">Code d'activation · valable 24 h</div>
-          <div class="code-value">{{ result?.codeActivation }}</div>
-          <button type="button" class="primary copy-btn" @click="copyCode">
-            {{ copied ? "✓ Copié dans le presse-papier !" : "Copier le code" }}
+          <div class="code-label">Lien d’activation · valable 24 h</div>
+          <div class="break-all text-left text-xs text-[var(--muted)]">{{ activationLink() }}</div>
+          <button type="button" class="primary copy-btn mt-4" @click="copyActivationLink">
+            {{ linkCopied ? "✓ Lien copié" : "Copier le lien" }}
           </button>
         </div>
 
         <div class="security-notice">
-          <svg viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; width: 14px; height: 14px; fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="size-3.5 shrink-0 fill-none stroke-[var(--warn)] stroke-[1.8] stroke-linecap-round stroke-linejoin-round">
             <rect x="5" y="10" width="14" height="10" rx="2" />
             <path d="M8 10V7a4 4 0 0 1 8 0v3" />
           </svg>
@@ -220,239 +222,4 @@ function copyCode() {
       </form>
     </div>
   </div>
-</template>
-
-<style scoped>
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 15, 18, 0.5);
-  backdrop-filter: blur(2px);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.modal-dialog {
-  width: 100%;
-  max-width: 560px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  margin: 4px 0 0;
-  font-size: 18px;
-}
-
-.close-btn {
-  font-size: 14px;
-  display: grid;
-  place-items: center;
-}
-
-.modal-body {
-  padding: 22px 24px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-top: 2px;
-}
-
-.form-section + .form-section {
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.form-section-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.form-section-title strong,
-.form-section-title small {
-  display: block;
-}
-
-.form-section-title strong {
-  font-size: 13px;
-}
-
-.form-section-title small {
-  margin-top: 2px;
-  color: var(--subtle);
-  font-size: 11px;
-}
-
-.section-number {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.form-group .field {
-  width: 100%;
-}
-
-.modal-footer {
-  margin-top: 4px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.activation-result {
-  padding: 28px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.result-badge {
-  display: inline-flex;
-  padding: 6px 14px;
-  background: color-mix(in srgb, var(--success) 15%, transparent);
-  border: 1px solid var(--success);
-  color: var(--success);
-  border-radius: 99px;
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.result-desc {
-  color: var(--muted);
-  font-size: 13px;
-  margin: 0 0 20px;
-}
-
-.code-box {
-  width: 100%;
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-
-.code-label {
-  font-size: 12px;
-  color: var(--subtle);
-  margin-bottom: 8px;
-}
-
-.code-value {
-  font-family: monospace;
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  color: var(--accent);
-  margin-bottom: 16px;
-}
-
-.copy-btn {
-  width: 100%;
-}
-
-.security-notice {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  background: color-mix(in srgb, var(--warn) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 11px;
-  color: var(--muted);
-  text-align: left;
-  margin-bottom: 20px;
-}
-
-.finish-btn {
-  width: 100%;
-}
-
-@media (max-width: 639px) {
-  .modal-backdrop {
-    align-items: end;
-    padding: 0;
-  }
-
-  .modal-dialog {
-    max-height: 94vh;
-    border-radius: 16px 16px 0 0;
-    overflow-y: auto;
-  }
-
-  .modal-header,
-  .modal-body,
-  .activation-result {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .modal-footer {
-    flex-direction: column-reverse;
-  }
-
-  .modal-footer button {
-    width: 100%;
-  }
-
-  .code-value {
-    font-size: 26px;
-  }
-}
-</style>
+  </template>

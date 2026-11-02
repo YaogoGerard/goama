@@ -14,7 +14,7 @@ L'idée n'est pas de figer une arborescence à tout prix, mais d'avoir un point 
 
 ```text
 goama/
-├── web/              # Client agent (Vue 3 + Vite + OpenMLS en WebAssembly)
+├── web/              # Client agent (Vue 3 + Vite + Megolm en WebAssembly)
 ├── admin/            # Tableau de bord Administrateur (Vue 3 + Vite)
 ├── backend/          # API REST + WebSocket (Fastify, monolithe modulaire)
 ├── docs/             # Documentation du projet
@@ -28,7 +28,7 @@ goama/
 - **Autonomie** : Chacun des trois dossiers doit pouvoir être copié seul, installé et lancé sans dépendre directement du code des autres.
 - **API-first** : Le contrat entre front et back passe uniquement par HTTP. On ne partage **pas** de dossier `shared/` commun.
 - **Monolithe modulaire côté backend** : `backend/` reste un monolithe modulaire par domaine (`auth`, `groups`, `messages`, `admin`, etc.), conformément à `docs/02_requirements_srs.md` (C-12).
-- **Chiffrement côté client** : Toute la logique OpenMLS, l'état MLS et le stockage local chiffré restent dans `web/`. `admin/` n'y touche en aucun cas.
+- **Chiffrement côté client** : Toute la logique Megolm, l'état Megolm et le stockage local chiffré restent dans `web/`. `admin/` n'y touche en aucun cas.
 - **Déploiement unifié** : `docker-compose.yml` à la racine doit permettre de tout lancer avec `docker compose up -d` (`REQ-OPS-001`).
 
 ## 4. Organisation interne
@@ -54,7 +54,7 @@ web/src/
 ├── components/# Composants Vue
 ├── stores/    # Pinia
 ├── services/  # Appels API / WebSocket
-├── crypto/    # Wrapper OpenMLS WASM
+├── crypto/    # Wrapper Megolm WASM
 ├── db/        # IndexedDB chiffré
 └── types/     # Types générés depuis l'API
 ```

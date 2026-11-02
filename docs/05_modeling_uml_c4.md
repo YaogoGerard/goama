@@ -58,7 +58,7 @@ flowchart TD
   A --> V{Matricule pré-inscrit, code valide et non expiré ?}
   V -->|non| E[Refus]
   V -->|oui| T[Enregistrement du second facteur TOTP]
-  T --> K[Le navigateur crée ses clés, dépose ses KeyPackages, reçoit son attestation]
+  T --> K[Le navigateur crée ses clés, dépose ses clé de session Megolm, reçoit son attestation]
   K --> OK([Compte actif, session unique])
 ```
 
@@ -77,7 +77,7 @@ sequenceDiagram
   participant S as API (Conversations et relais)
   participant Q as File de distribution
   participant B as Navigateur B
-  A->>A: chiffrer le message (MLS), niveau de classification dedans
+  A->>A: chiffrer le message (Megolm), niveau de classification dedans
   A->>S: envoyer le blob chiffré (id client unique)
   S->>S: contrôle d'accès, limites, numéro de séquence
   S-->>A: accusé du serveur : « Envoyé »
@@ -104,7 +104,7 @@ sequenceDiagram
   participant S as Serveur
   participant A as Navigateur A (émetteur)
   B->>B: l'agent ouvre la conversation, le message est affiché
-  B->>B: créer un message MLS « Lu » signé par la clé de l'appareil de B
+  B->>B: créer un message Megolm « Lu » signé par la clé de l'appareil de B
   B->>S: envoyer le blob chiffré
   S->>A: relayer sans pouvoir le lire ni le modifier
   A->>A: déchiffrer, vérifier la signature et l'identité de B
@@ -207,7 +207,7 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  C["Client agent<br/>Vue.js 3 + Vite<br/>OpenMLS WebAssembly<br/>IndexedDB + clé non extractible"] -->|HTTPS, WebSocket| P["Proxy Caddy<br/>TLS, limite par IP"]
+  C["Client agent<br/>Vue.js 3 + Vite<br/>Megolm WebAssembly<br/>IndexedDB + clé non extractible"] -->|HTTPS, WebSocket| P["Proxy Caddy<br/>TLS, limite par IP"]
   D["Tableau de bord<br/>Vue.js 3"] -->|HTTPS| P
   P --> API["API Fastify<br/>monolithe modulaire"]
   API --> DB[("PostgreSQL<br/>comptes, sessions, blobs chiffrés, audit")]
@@ -289,7 +289,7 @@ sequenceDiagram
     P->>S: valider la demande
     S->>S: vérifier la capacité de parrainage du poste du parrain ; auditer la validation avec son identité
     S->>S: créer le groupe, ajouter le demandeur avec le rôle créateur et le parrain avec le rôle parrain
-    A->>A: dérouler l'ajout MLS : KeyPackages, Welcome, commit (nouvel epoch)
+    A->>A: dérouler l'ajout Megolm : clé de session Megolm, clé de session Megolm, commit (nouvel epoch)
     S-->>D: le groupe existe ; les membres pressentis rejoignent
   end
 ```
@@ -297,6 +297,6 @@ sequenceDiagram
 | | |
 |---|---|
 | Exigences | REQ-AUTHZ-005, 006 · REQ-GRP-001 à 003 · REQ-AUD-001 |
-| Frontière | Le serveur décide des rôles, jamais du contenu : le commit MLS est soumis par le navigateur du parrain |
+| Frontière | Le serveur décide des rôles, jamais du contenu : la rotation Megolm est soumis par le navigateur du parrain |
 | Échec | Parrain non habilité, agent pressenti non actif, refus : aucun groupe créé, les deux cas audités |
 | Test | T-063, T-064, T-065 |

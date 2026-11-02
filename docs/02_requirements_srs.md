@@ -16,23 +16,21 @@ Les exigences emploient **DOIT**, **NE DOIT PAS**, **DEVRAIT**, **PEUT** (RFC 21
 
 Une **contrainte** est une limitation imposée à la conception ; elle n'est pas une exigence à prouver par développement.
 
-| ID | Contrainte | Origine |
-|---|---|---|
-| C-01 | Chiffrement de bout en bout par un protocole open source éprouvé (MLS via OpenMLS) ; aucune cryptographie développée par l'équipe (élimination) | Hackathon |
-| C-02 | Aucun message en clair côté serveur (élimination) | Hackathon |
-| C-03 | Hébergement souverain, sans service tiers indispensable, installation en une commande (Docker Compose) | Hackathon |
-| C-04 | Seuls des agents enrôlés, authentification forte, gestion des rôles | Hackathon |
-| C-05 | Révocation immédiate de l'agent sur tous ses appareils (ici : appareil unique) | Hackathon |
-| C-06 | Métadonnées visibles par le serveur documentées, avec mesures de réduction | Hackathon |
-| C-07 | Code sous licence OSI avec fichier LICENSE ; chaque technologie citée avec sa licence et son lien ; niveau d'engagement « Créer » | Hackathon |
-| C-08 | Données et comptes fictifs uniquement ; aucun test d'intrusion sur un système réel | Hackathon |
-| C-09 | Dépôt public avec commits progressifs, README en français de 2 pages au plus, comptes de démonstration, fichiers de déploiement | Hackathon |
-| C-10 | Dossier : fiche équipe, note de pré-projet (2 p.), note de sécurité (2 p.), dépôt, vidéo de 3 min (échange chiffré, révocation, innovation) | Hackathon |
-| C-11 | Entretien : chaque membre explique le code de chiffrement et d'authentification ; épreuves tirées au sort | Hackathon |
-| C-12 | Stack : client web Vue.js 3 + Vite avec OpenMLS en WebAssembly, API Fastify (monolithe modulaire), PostgreSQL, Redis, BullMQ, MinIO, tableau de bord Vue.js 3, Docker Compose | Équipe |
-| C-13 | Un seul appareil par agent | Équipe |
+| ID | Contrainte |
+|---|---|
+| C-01 | Chiffrement de bout en bout par un protocole open source éprouvé (Megolm via libolm WebAssembly) ; aucune cryptographie développée par l'équipe |
+| C-02 | Aucun message en clair côté serveur |
+| C-03 | Hébergement souverain, sans service tiers indispensable, installation en une commande (Docker Compose) |
+| C-04 | Seuls des agents enrôlés, authentification forte, gestion des rôles |
+| C-05 | Révocation immédiate de l'agent sur tous ses appareils (ici : appareil unique) |
+| C-06 | Métadonnées visibles par le serveur documentées, avec mesures de réduction |
+| C-07 | Code sous licence OSI avec fichier LICENSE ; chaque technologie citée avec sa licence et son lien |
+| C-08 | Données et comptes fictifs uniquement ; aucun test d'intrusion sur un système réel |
+| C-09 | Dépôt public avec commits progressifs, README en français, comptes de démonstration, fichiers de déploiement |
+| C-12 | Stack : client web Vue.js 3 + Vite avec Megolm en WebAssembly, API Fastify (monolithe modulaire), PostgreSQL, Redis, BullMQ, MinIO, tableau de bord Vue.js 3, Docker Compose |
+| C-13 | Un seul appareil par agent |
 | C-14 | Moins d'une semaine, équipe de 3 | Équipe |
-| C-15 | Pas de plan B si OpenMLS en WebAssembly échoue (risque accepté, R-01) | Équipe |
+| C-15 | Pas de plan B si Megolm en WebAssembly échoue (risque accepté, R-01) | Équipe |
 
 ## 4. Exigences
 
@@ -72,10 +70,10 @@ Un groupe n'existe qu'après validation par un parrain. Le créateur et le parra
 | REQ-GRP-001 | P0 | Une demande de création de groupe DOIT être validée par un parrain ; le groupe n'existe qu'après cette validation, et le parrain en devient membre avec le rôle de parrain. | Processus | G-01 |
 | REQ-GRP-002 | P0 | La validation NE DOIT PAS dépendre du ministère, de la structure ni d'un périmètre du demandeur : un parrain habilité valide la demande de tout agent actif, y compris pour un groupe interministériel. | Règle métier | G-01 |
 | REQ-GRP-003 | P0 | Seuls des agents actifs de l'annuaire DOIVENT pouvoir être membres d'un groupe. | Règle métier | G-01 |
-| REQ-GRP-004 | P0 | Le créateur et le parrain DOIVENT pouvoir gérer le groupe : ajouter et retirer des membres, renommer le groupe, promouvoir un membre en co-parrain ou le rétrograder, et supprimer le groupe. Tout changement de membres produit un nouveau commit MLS et un nouvel epoch. | Processus | G-01, G-05 |
+| REQ-GRP-004 | P0 | Le créateur et le parrain DOIVENT pouvoir gérer le groupe : ajouter et retirer des membres, renommer le groupe, promouvoir un membre en co-parrain ou le rétrograder, et supprimer le groupe. Tout changement de membres DOIT déclencher une rotation des sessions Megolm et la distribution de la nouvelle clé via Olm aux seuls appareils autorisés ; le compteur de génération Goama est incrémenté. | Processus | G-01, G-05 |
 | REQ-GRP-005 | P0 | L'Administrateur NE DOIT disposer d'aucune opération sur les groupes : ni création, ni validation, ni lecture, ni retrait de membre, ni suspension. | Invariant | G-06 |
 | REQ-GRP-006 | P1 | Le nom d'un groupe NE DOIT PAS être stocké en clair côté serveur ; il voyage dans les messages chiffrés du groupe. | Invariant | G-02 |
-| REQ-GRP-007 | P1 | Un agent DOIT pouvoir quitter volontairement un groupe ; le départ produit un commit MLS émis par son propre appareil. | Processus | G-05 |
+| REQ-GRP-007 | P1 | Un agent DOIT pouvoir quitter volontairement un groupe ; le départ produit une rotation Megolm émis par son propre appareil. | Processus | G-05 |
 | REQ-GRP-008 | P1 | Le parrain DOIT pouvoir suspendre un groupe — publications et changements de membres gelés, état et données conservés — puis le reprendre. | Processus | G-01 |
 | REQ-GRP-009 | P1 | Un groupe DOIT conserver au moins un parrain ; si le dernier parrain quitte ou est révoqué, le groupe est gelé et signalé au tableau de bord, sans intervention de l'Administrateur. | Invariant | G-05, G-11 |
 
@@ -164,7 +162,7 @@ Un groupe n'existe qu'après validation par un parrain. Le créateur et le parra
 |---|---|---|---|---|
 | REQ-ABUSE-001 | P0 | Le serveur DOIT limiter les tentatives de connexion à 5 par minute et par adresse IP. | Politique | G-12 |
 | REQ-ABUSE-002 | P1 | Le serveur DOIT limiter l'envoi de messages à 60 par minute et par session. | Politique | G-12 |
-| REQ-ABUSE-003 | P1 | Le serveur DOIT limiter la récupération de KeyPackages à 30 par minute et par demandeur. | Politique | G-12 |
+| REQ-ABUSE-003 | P1 | Le serveur DOIT limiter la récupération de clé de session Megolm à 30 par minute et par demandeur. | Politique | G-12 |
 | REQ-ABUSE-004 | P0 | Tout dépassement de limite DOIT produire un refus 429 avec l'en-tête Retry-After, sans détail interne. | Politique | G-12 |
 | REQ-ABUSE-005 | P1 | Le serveur DOIT refuser un message de plus de 64 Ko. | Politique | G-12 |
 | REQ-ABUSE-006 | P1 | Les compteurs de limitation DOIVENT être partagés entre instances via Redis. | Invariant | G-12 |
@@ -174,7 +172,7 @@ Un groupe n'existe qu'après validation par un parrain. Le créateur et le parra
 
 | ID | Prio | Exigence | Nature | Garantie |
 |---|---|---|---|---|
-| REQ-SEC-001 | P0 | La confidentialité DOIT reposer sur MLS (RFC 9420) via OpenMLS compilé en WebAssembly, avec la seule suite 0x0001 (X25519, AES-128-GCM, Ed25519). | Invariant | G-02 |
+| REQ-SEC-001 | P0 | La confidentialité des messages de groupe DOIT reposer sur Megolm (`m.megolm.v1.aes-sha2`) côté client. Les clés de session DOIVENT être distribuées aux seuls appareils autorisés via des sessions Olm authentifiées (Double Ratchet), jamais en clair au serveur. Les clés privées et états cryptographiques restent sur l’appareil. | Invariant | G-02 |
 | REQ-SEC-003 | P0 | Les clés privées DOIVENT rester sur l'appareil et ne jamais être envoyées au serveur. | Invariant | G-13 |
 | REQ-SEC-004 | P0 | L'état de chiffrement persistant DOIT être stocké dans IndexedDB, chiffré par une clé WebCrypto non extractible. | Invariant | G-13 |
 | REQ-SEC-005 | P0 | Toutes les communications DOIVENT utiliser TLS 1.2 ou plus. | Invariant | G-02 |

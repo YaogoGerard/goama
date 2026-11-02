@@ -89,7 +89,7 @@ describe("Épreuve : l'intrus est rejeté", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(a.jeton),
-      payload: { epoch: 0, kind: "mls_app", content: "c2VjcmV0" },
+      payload: { epoch: 0, kind: "megolm_app", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: "session-intrus-test", ciphertext: "AwgAc2FmZS1ibG9i" }) },
     });
 
     // B n'est PAS membre : lecture et envoi refusés
@@ -105,7 +105,7 @@ describe("Épreuve : l'intrus est rejeté", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(b.jeton),
-      payload: { epoch: 0, kind: "mls_app", content: "aW50cnVz" },
+      payload: { epoch: 0, kind: "megolm_app", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: "session-intrus-test", ciphertext: "AwgAaW50cnVzLWJsb2I" }) },
     });
     expect(envoi.statusCode).toBe(403);
   });

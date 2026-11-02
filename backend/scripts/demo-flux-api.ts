@@ -89,7 +89,7 @@ async function main() {
   const envoi = await appel(
     "POST",
     `/groupes/${groupe.corps.id}/messages`,
-    { epoch: 0, kind: "mls_app", content: blob },
+    { epoch: 0, kind: "megolm_app", content: blob },
     jetonAgent,
   );
   console.log(`6. message chiffré                   → ${envoi.statut} seq=${envoi.corps.seq}`);

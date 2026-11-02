@@ -74,9 +74,66 @@ describe("REQ-AUTHZ-005 : parrainage par poste officiel", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(membre.jeton),
-      payload: { epoch: 0, kind: "mls_app", content: "aGVsbG8=" },
+      payload: { epoch: 0, kind: "megolm_app", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: "session-verrou-test", ciphertext: "AwgAdGVzdC1ibG9i" }) },
     });
     expect(msg.statusCode).toBe(201);
+  });
+
+  it("un agent non habilité peut demander un groupe puis le parrain l'approuve", async () => {
+    const admin = await jetonAdmin(app);
+    const demandeur = await creerAgentActif(app, admin, `TEST-${suffixe}-P5`);
+    const parrain = await creerParrain(app, admin, `TEST-${suffixe}-P6`);
+
+    const demande = await app.inject({
+      method: "POST",
+      url: "/groupes/demandes",
+      headers: entete(demandeur.jeton),
+      payload: { parrainId: parrain.agentId },
+    });
+    expect(demande.statusCode).toBe(201);
+
+    const liste = await app.inject({
+      method: "GET",
+      url: "/groupes/demandes",
+      headers: entete(parrain.jeton),
+    });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: demande.json().id, estDemandeur: false }),
+    ]));
+
+    const approbation = await app.inject({
+      method: "POST",
+      url: `/groupes/demandes/${demande.json().id}/approuver`,
+      headers: entete(parrain.jeton),
+    });
+    expect(approbation.statusCode).toBe(200);
+    expect(approbation.json()).toHaveProperty("id");
+
+    const groupes = await app.inject({
+      method: "GET",
+      url: "/groupes",
+      headers: entete(demandeur.jeton),
+    });
+    expect(groupes.statusCode).toBe(200);
+    expect(groupes.json()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: approbation.json().id }),
+    ]));
+  });
+
+  it("refuse une demande adressée à un agent non habilité", async () => {
+    const admin = await jetonAdmin(app);
+    const demandeur = await creerAgentActif(app, admin, `TEST-${suffixe}-P7`);
+    const agent = await creerAgentActif(app, admin, `TEST-${suffixe}-P8`);
+
+    const demande = await app.inject({
+      method: "POST",
+      url: "/groupes/demandes",
+      headers: entete(demandeur.jeton),
+      payload: { parrainId: agent.agentId },
+    });
+    expect(demande.statusCode).toBe(400);
+    expect(demande.json().erreur).toBe("parrain_invalide");
   });
 });
 

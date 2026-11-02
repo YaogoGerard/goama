@@ -6,6 +6,7 @@ import { prisma } from "../plugins/db.js";
 import { ErreurApi } from "../lib/erreurs.js";
 import { journaliser } from "../plugins/audit.js";
 import { CATEGORIES, MINISTERES, POSTES_REFERENCE } from "../reference-data.js";
+import { estHabiliteParrain } from "../lib/parrainage.js";
 
 function pagination(req: { query?: unknown }) {
   const query = (req.query ?? {}) as { page?: string; limit?: string; search?: string; status?: string };
@@ -35,7 +36,7 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
       where: { statut: "ACTIF" },
       select: { id: true, prenom: true, nom: true, ministere: true, fonction: true },
       orderBy: [{ ministere: "asc" }, { nom: "asc" }],
-    });
+    }).then((agents) => agents.map((agent) => ({ ...agent, habiliteParrain: estHabiliteParrain(agent.fonction) })));
   });
 
   // ---- Révocation immédiate (Administrateur uniquement) ----------------

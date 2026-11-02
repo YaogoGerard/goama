@@ -186,7 +186,7 @@ onMounted(() => {
           <span>Thème {{ theme === 'dark' ? 'clair' : 'sombre' }}</span>
         </button>
 
-        <button type="button" class="row-action" style="margin-top: 6px; border: 0" @click="handleLogout">
+        <button type="button" class="row-action mt-1.5 border-0" @click="handleLogout">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M14 4h-7v16h7M10 12h11M18 9l3 3-3 3" />
           </svg>
@@ -229,7 +229,6 @@ onMounted(() => {
             <h1>
               {{ currentTab === 'dashboard' ? 'Vue d’ensemble' : 'Activité' }}
             </h1>
-            <p>Gérez les agents et suivez l’activité de votre organisation.</p>
           </div>
         </div>
 

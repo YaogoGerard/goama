@@ -7,3 +7,5 @@ src/generated/
 backend/src/generated/
 .pgdata/
 backend/.pgdata/
+livraison/
+test-results/

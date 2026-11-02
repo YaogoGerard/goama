@@ -4,14 +4,14 @@
 // Temps 1 — COUPURE SERVEUR, immédiat et centralisé :
 //   1. statut → REVOQUE (plus aucune reconnexion possible) ;
 //   2. toutes les sessions révoquées (les JWT vivants deviennent inertes) ;
-//   3. KeyPackages supprimés (plus ajoutable dans aucun groupe) ;
+//   3. pré-clés Olm supprimés (plus ajoutable dans aucun groupe) ;
 //   4. sorties de tous les groupes (métadonnée côté serveur) ;
 //   5. ses sockets WebSocket reçoivent "revoque" puis sont FERMÉES (4003).
 //
-// Temps 2 — RETRAIT CRYPTOGRAPHIQUE MLS, fait par les CLIENTS :
-//   le serveur ne peut pas produire un commit MLS (il n'a pas les clés) ;
+// Temps 2 — ROTATION CRYPTOGRAPHIQUE Megolm, fait par les CLIENTS :
+//   le serveur ne peut pas produire un rotation Megolm (il n'a pas les clés) ;
 //   les membres en ligne reçoivent "membre_retire" et un d'entre eux émet
-//   le retrait MLS : l'agent révoqué ne peut plus déchiffrer les nouveaux
+//   le retrait Megolm : l'agent révoqué ne peut plus déchiffrer les nouveaux
 //   messages, même s'il gardait une copie de l'ancien état du groupe.
 //
 // Épreuve du jury « Révocation » : l'agent révoqué perd l'accès
@@ -45,11 +45,15 @@ export async function revoquerAgent(agentId: string, adminId: string) {
     }),
     // Plus aucun KeyPackage : un révoqué ne peut plus rejoindre de groupe
     prisma.keyPackage.deleteMany({ where: { agentId } }),
-    // Sortie de tous les groupes (vue serveur ; le retrait MLS est côté clients)
+    // Sortie de tous les groupes (vue serveur ; le retrait Megolm est côté clients)
     prisma.groupMember.updateMany({
       where: { agentId, removedAt: null },
       data: { removedAt: new Date() },
     }),
+    ...groupes.map((g) => prisma.group.update({
+      where: { id: g.groupeId },
+      data: { epoch: { increment: 1 } },
+    })),
     ...groupes.map((g) =>
       prisma.retraitCryptographique.upsert({
         where: { groupeId_agentId: { groupeId: g.groupeId, agentId } },
@@ -61,10 +65,20 @@ export async function revoquerAgent(agentId: string, adminId: string) {
 
   await journaliser(adminId, "revocation", agent.matricule);
 
-  // Effets immédiats sur les connexions ouvertes
+  // Effets immédiats sur les connexions ouvertes.
+  // IMPORTANT : versGroupe attend des identifiants d'agents, pas un identifiant
+  // de groupe. On relit donc les membres encore actifs APRÈS la transaction.
   relais.versAgent(agentId, { type: "revoque" });
-  for (const g of groupes) {
-    relais.versGroupe([g.groupeId], { type: "membre_retire", groupeId: g.groupeId, agentId });
+  for (const groupe of groupes) {
+    const membresRestants = await prisma.groupMember.findMany({
+      where: { groupeId: groupe.groupeId, removedAt: null },
+      select: { agentId: true },
+    });
+    const etatGroupe = await prisma.group.findUniqueOrThrow({ where: { id: groupe.groupeId }, select: { epoch: true } });
+    relais.versGroupe(
+      membresRestants.map((membre) => membre.agentId),
+      { type: "membre_retire", groupeId: groupe.groupeId, agentId, epoch: etatGroupe.epoch },
+    );
   }
   relais.fermerAgent(agentId, 4003);
 

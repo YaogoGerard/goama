@@ -2,8 +2,8 @@
 // ÉPREUVE « Le serveur ne lit rien » (bonus +2 : test automatisé)
 //
 // Vérifie que la base de données ne contient AUCUN texte en clair :
-//   1. le message envoyé est stocké EXACTEMENT tel que reçu (blob
-//      base64) — le serveur ne le transforme ni ne le déchiffre ;
+//   1. une enveloppe synthétique structurée est stockée EXACTEMENT telle que reçue ;
+//      ce test vérifie le contrat de stockage, pas le chiffrement cryptographique ;
 //   2. le texte clair n'apparaît dans AUCUNE ligne de la table ;
 //   3. la table des groupes n'a AUCUNE colonne de nom (le nom voyage
 //      chiffré dans un message — REQ-GRP-006) ;
@@ -44,12 +44,27 @@ describe("Épreuve : le serveur ne lit rien", () => {
     });
     expect(ajout.statusCode).toBe(201);
 
-    const contenu = Buffer.from(CLAIR).toString("base64"); // ce que ferait OpenMLS
+    // Enveloppe de test opaque : ce test vérifie le contrat de stockage/relayage,
+    // PAS l’algorithme Megolm. Seul un test navigateur entre deux agents peut
+    // prouver le chiffrement réel ; aucun texte clair n'est placé ici.
+    const contenu = JSON.stringify({
+      algorithm: "m.megolm.v1.aes-sha2",
+      session_id: `session-test-${suffixe}`,
+      ciphertext: "AwgAEhB0ZXN0LWNpcGhlcnRleHQtYmxvYg",
+    });
+    const clairRefuse = await app.inject({
+      method: "POST",
+      url: `/groupes/${groupeId}/messages`,
+      headers: entete(a.jeton),
+      payload: { epoch: 0, kind: "megolm_app", content: CLAIR },
+    });
+    expect(clairRefuse.statusCode).toBe(400);
+
     const envoi = await app.inject({
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(a.jeton),
-      payload: { epoch: 0, kind: "mls_app", content: contenu },
+      payload: { epoch: 0, kind: "megolm_app", content: contenu },
     });
     expect(envoi.statusCode).toBe(201);
 
@@ -60,6 +75,7 @@ describe("Épreuve : le serveur ne lit rien", () => {
       expect(m.content).not.toContain(CLAIR);
       expect(m.content).not.toContain("ORDRE");
       expect(m.content).not.toContain("MISSION");
+      expect(m.content).not.toContain("CONFIDENTIEL");
     }
     // Le blob est stocké tel quel (relayage fidèle, sans interprétation)
     const stocke = messages.find((m) => m.groupeId === groupeId && m.content === contenu);
@@ -81,7 +97,7 @@ describe("Épreuve : le serveur ne lit rien", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(b.jeton),
-      payload: { epoch: 0, kind: "recu_lu", content: Buffer.from("recu-lu-signe").toString("base64") },
+      payload: { epoch: 0, kind: "recu_lu", content: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", session_id: `session-test-${suffixe}`, ciphertext: "AwgAcmVjZS1sdS1ibG9i" }) },
     });
     expect(recu.statusCode).toBe(201);
   });
@@ -97,7 +113,7 @@ describe("Épreuve : le serveur ne lit rien", () => {
       method: "POST",
       url: `/groupes/${groupeId}/messages`,
       headers: entete(a.jeton),
-      payload: { epoch: 5, kind: "mls_commit", content: "Zm9v" },
+      payload: { epoch: 5, kind: "megolm_key_share", content: JSON.stringify({ algorithm: "m.olm.v1.curve25519-aes-sha2", sender_key: "curve25519-test", ciphertext: { "curve25519-recipient": { type: 1, body: "AwgAb2xtLWJsb2I" } } }) },
     });
     expect(mauvais.statusCode).toBe(409);
     expect(mauvais.json().erreur).toBe("epoch_perime");

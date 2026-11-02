@@ -1,20 +1,24 @@
 // Routes de messagerie. Toutes exigent un agent authentifié (requireAuth)
 // et, pour les groupes, l'appartenance ou le parrainage (dans le service).
 import type { FastifyInstance } from "fastify";
-import { SchemaAjoutMembre, SchemaMessage } from "./schemas.js";
+import { SchemaAjoutMembre, SchemaDemandeGroupe, SchemaMessage } from "./schemas.js";
 import {
   ajouterMembre,
+  approuverDemandeGroupe,
   creerGroupe,
+  demanderGroupe,
+  listerDemandesGroupe,
   listerMesGroupes,
   listerMessages,
   membresDuGroupe,
   posterMessage,
-  prendreKeyPackages,
-  publierKeyPackage,
+  rejeterDemandeGroupe,
   retirerMembre,
+  listerClesOlmPourGroupe,
 } from "./service.js";
 import { validerCorps } from "../lib/validation.js";
 import { ErreurApi } from "../lib/erreurs.js";
+import { z } from "zod";
 
 export function enregistrerRoutesMessaging(app: FastifyInstance) {
   // ---- Groupes ----------------------------------------------------------
@@ -27,6 +31,27 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
     return listerMesGroupes(req.agent!.id);
   });
 
+  app.post("/groupes/demandes", { preHandler: [app.requireAuth] }, async (req, reply) => {
+    const corps = validerCorps(SchemaDemandeGroupe, req.body);
+    return reply
+      .code(201)
+      .send(await demanderGroupe(req.agent!.id, corps.parrainId, { nom: corps.nom, membres: corps.membres }));
+  });
+
+  app.get("/groupes/demandes", { preHandler: [app.requireAuth] }, async (req) => {
+    return listerDemandesGroupe(req.agent!.id);
+  });
+
+  app.post("/groupes/demandes/:id/approuver", { preHandler: [app.requireAuth] }, async (req) => {
+    const { id } = req.params as { id: string };
+    return approuverDemandeGroupe(id, req.agent!.id);
+  });
+
+  app.post("/groupes/demandes/:id/rejeter", { preHandler: [app.requireAuth] }, async (req) => {
+    const { id } = req.params as { id: string };
+    return rejeterDemandeGroupe(id, req.agent!.id);
+  });
+
   app.get("/groupes/:id/membres", { preHandler: [app.requireAuth] }, async (req) => {
     const { id } = req.params as { id: string };
     return membresDuGroupe(id, req.agent!.id);
@@ -35,8 +60,8 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
   app.post("/groupes/:id/membres", { preHandler: [app.requireAuth] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const corps = validerCorps(SchemaAjoutMembre, req.body);
-    await ajouterMembre(id, corps.agentId, req.agent!.id);
-    return reply.code(201).send({ ok: true });
+    const resultat = await ajouterMembre(id, corps.agentId, req.agent!.id);
+    return reply.code(201).send(resultat);
   });
 
   app.delete("/groupes/:id/membres/:agentId", { preHandler: [app.requireAuth] }, async (req) => {
@@ -44,7 +69,20 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
     return retirerMembre(id, agentId, req.agent!.id);
   });
 
-  // ---- Messages (blobs chiffrés MLS) ------------------------------------
+  // Clés publiques Olm des membres. Les pré-clés ne sont consommées que
+  // pour les agents demandés par le client qui n'a pas encore de session Olm.
+  app.post("/groupes/:id/olm-keys", {
+    preHandler: [app.requireAuth],
+    config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
+  }, async (req) => {
+    const { id } = req.params as { id: string };
+    const schema = z.object({ claimFor: z.array(z.string().uuid()).max(100) }).strict();
+    const parsed = schema.safeParse(req.body ?? { claimFor: [] });
+    if (!parsed.success) throw new ErreurApi(400, "requete_cles_olm_invalide");
+    return listerClesOlmPourGroupe(id, req.agent!.id, parsed.data.claimFor);
+  });
+
+  // ---- Messages (blobs chiffrés Megolm) ------------------------------------
   // REQ-ABUSE-002 (P1) : 60 messages / minute / session
   app.post(
     "/groupes/:id/messages",
@@ -67,27 +105,5 @@ export function enregistrerRoutesMessaging(app: FastifyInstance) {
     return listerMessages(id, req.agent!.id, apresSeq);
   });
 
-  // ---- KeyPackages MLS ----------------------------------------------------
-  app.post("/key-packages", { preHandler: [app.requireAuth] }, async (req, reply) => {
-    const corps = req.body as { payload?: unknown };
-    if (typeof corps?.payload !== "string" || corps.payload.length === 0 || corps.payload.length > 16384) {
-      throw new ErreurApi(400, "corps_invalide:payload"); // KeyPackage = base64 ≤ 16 Ko
-    }
-    return reply.code(201).send(publierKeyPackage(req.agent!.id, corps.payload));
-  });
 
-  // REQ-ABUSE-003 (P1) : 30 récupérations de KeyPackages / minute / demandeur
-  app.get(
-    "/key-packages/:agentId",
-    {
-      preHandler: [app.requireAuth],
-      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
-    },
-    async (req) => {
-      const { agentId } = req.params as { agentId: string };
-      const query = req.query as { nombre?: string };
-      const nombre = Number.parseInt(query.nombre ?? "1", 10) || 1;
-      return prendreKeyPackages(agentId, nombre);
-    },
-  );
 }

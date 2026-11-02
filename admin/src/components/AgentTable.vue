@@ -115,11 +115,11 @@ function formatDate(iso: string | null) {
       </button>
     </div>
 
-    <div v-if="actionError" class="login-alert danger" style="margin: 12px">
+    <div v-if="actionError" class="login-alert danger m-3">
       <div>{{ actionError }}</div>
     </div>
 
-    <div style="overflow-x: auto">
+    <div class="overflow-x-auto">
       <table class="table">
         <thead>
           <tr>
@@ -133,12 +133,12 @@ function formatDate(iso: string | null) {
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="6" style="text-align: center; padding: 32px; color: var(--muted)">
+            <td colspan="6" class="p-8 text-center text-[var(--muted)]">
               Chargement...
             </td>
           </tr>
           <tr v-else-if="filteredAgents.length === 0">
-            <td colspan="6" style="text-align: center; padding: 32px; color: var(--muted)">
+            <td colspan="6" class="p-8 text-center text-[var(--muted)]">
               Aucun agent ne correspond aux critères de recherche.
             </td>
           </tr>
@@ -191,7 +191,7 @@ function formatDate(iso: string | null) {
               >
                 Réactiver
               </button>
-              <span v-if="agent.statut === 'REVOQUE'" class="status revoked" style="border: 0; padding: 0">
+              <span v-if="agent.statut === 'REVOQUE'" class="status revoked border-0 p-0">
                 Accès coupé
               </span>
             </td>
@@ -281,70 +281,4 @@ function formatDate(iso: string | null) {
     </div>
 
   </div>
-</template>
-
-<style scoped>
-.action-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgb(0 0 0 / 65%);
-  backdrop-filter: blur(4px);
-}
-
-.action-modal {
-  width: min(100%, 480px);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: 0 20px 48px rgb(0 0 0 / 40%);
-}
-
-.action-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.action-modal-header h3 {
-  margin: 4px 0 0;
-  font-size: 18px;
-}
-
-.action-modal-body {
-  padding: 24px;
-}
-
-.action-modal-body p {
-  margin: 0 0 8px;
-  font-weight: 600;
-}
-
-.action-modal-body p span,
-.action-modal-body small {
-  color: var(--muted);
-}
-
-.action-modal-body small {
-  font-size: 13px;
-}
-
-.action-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 0 24px 24px;
-}
-
-.close-btn {
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-}
-</style>
+  </template>

@@ -88,13 +88,13 @@ Le projet démontre sa valeur si :
 | **Si le temps le permet (P1)** | Départ volontaire, suspension et reprise d'un groupe, gel du groupe sans parrain, filigrane, reprise des transferts, purge automatique, métriques, sauvegarde |
 | **Après le sprint (P2)** | Rôle d'auditeur, export d'une preuve de lecture, masquage de présence, passage à 5 000 connexions |
 
-Ordre du hackathon : **tout le P0 d'abord, l'intégralité du P1 ensuite** ; aucun P2. Si le temps manque, les P1 se retirent un à un, jamais les éléments du socle P0.
+Ordre de mise en œuvre : **tout le P0 d'abord, l'intégralité du P1 ensuite** ; aucun P2. Si les ressources manquent, les P1 se retirent un à un, jamais les éléments du socle P0.
 
 ## 8. Hors périmètre initial
 
 - messagerie ouverte au public ; inscription libre ;
 - appels audio et vidéo ;
-- plusieurs appareils par agent ;
+- plusieurs appareils par agent (hors périmètre ; un seul appareil actif par agent) ;
 - accusés de lecture dans les groupes ;
 - blocage des captures d'écran et des photos d'écran ;
 - lien d'invitation public à un groupe, icône de groupe, restriction d'envoi aux seuls parrains ;
