@@ -65,8 +65,13 @@ export interface Retention {
   id: string;
   groupeId: string;
   agentId: string;
+  epoch: number;
   statut: "EN_ATTENTE" | "TERMINE" | "ECHEC";
   erreur: string | null;
+  membresAttendus: number;
+  membresAccuses: number;
+  recus: number;
+  attendus: number;
   createdAt: string;
   updatedAt: string;
 }

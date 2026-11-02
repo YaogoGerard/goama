@@ -113,6 +113,7 @@ const onlineAgents = ref<Set<string>>(new Set())
 let wsSocket: ReturnType<typeof connectNotifications> | null = null
 let wsReconnectTimer: number | undefined
 let presenceTimer: number | undefined
+let chatViewMounted = false
 
 // Gestion des membres du groupe sélectionné
 const membersOpen = ref(false)
@@ -290,6 +291,11 @@ const fetchMessages = async (chat: ChatItem): Promise<{ messages: Message[]; der
         }
         const importedId = await megolmService.importSessionKey(meId.value, chat.id, roomKey.sessionKey, roomKey.messageIndex, roomKey.epoch)
         if (importedId !== roomKey.sessionId) throw new Error('megolm_session_id_incoherent')
+        // Preuve envoyée seulement après l'import et la vérification du
+        // session_id local. Les partages d'epochs historiques ne sont pas acquittés.
+        if (message.epoch === chat.epoch) {
+          await api.acknowledgeGroupKey(chat.id, message.epoch, message.senderId)
+        }
         await memoriserPartageTraite()
         await olmService.acknowledgeInbound(meId.value, processingId)
       } catch (error) {
@@ -496,12 +502,12 @@ const preparerChiffrementGroupe = async (chat: ChatItem): Promise<void> => {
 
 const messageErreurCrypto = (error: unknown): string => {
   const code = error instanceof Error ? error.message : ''
-  if (code === 'olm_cle_publique_absente') return 'Un membre doit ouvrir Goama une première fois pour publier son identité cryptographique.'
-  if (code === 'olm_precle_indisponible') return 'Un membre doit se reconnecter pour renouveler ses pré-clés Olm.'
-  if (code === 'olm_identite_modifiee_verification_hors_bande_requise' || code === 'identite_olm_change_reinitialisation_admin_requise') return 'Une identité cryptographique a changé. La vérification administrative et hors bande est obligatoire avant de poursuivre.'
-  if (code === 'olm_envoi_en_attente_autre_payload') return 'Un partage de clé précédent est encore en attente. La reprise doit être vérifiée avant tout nouvel envoi.'
-  if (code === 'megolm_distribution_olm_requise') return 'La clé Megolm n’a pas encore été distribuée à tous les membres actifs. L’envoi reste bloqué.'
-  return 'La distribution sécurisée des clés du groupe a échoué. Les envois restent bloqués.'
+  if (code === 'olm_cle_publique_absente') return 'Un participant doit ouvrir Goama une première fois avant que les échanges puissent commencer.'
+  if (code === 'olm_precle_indisponible') return 'Un participant doit se reconnecter avant que les échanges puissent reprendre.'
+  if (code === 'olm_identite_modifiee_verification_hors_bande_requise' || code === 'identite_olm_change_reinitialisation_admin_requise') return 'La vérification de sécurité de cette conversation doit être renouvelée avant de poursuivre.'
+  if (code === 'olm_envoi_en_attente_autre_payload') return 'La protection de la conversation est en cours de vérification. Réessayez dans un instant.'
+  if (code === 'megolm_distribution_olm_requise') return 'La protection de la conversation n’est pas encore prête. L’envoi reste temporairement bloqué.'
+  return 'La protection de la conversation n’est pas prête. Les envois restent temporairement bloqués.'
 }
 
 const selectConversation = async (chat: ChatItem) => {
@@ -653,7 +659,7 @@ const soumettreAssistant = async () => {
         id: group.id,
         name: nom,
         isGroup: true,
-        lastMessage: 'Groupe créé. Initialisation du chiffrement sécurisé.',
+        lastMessage: 'Groupe créé. Préparation de la protection des échanges.',
         time: 'À l’instant',
         classification: 'Normal',
         epoch: groupEpoch,
@@ -729,7 +735,7 @@ const addMemberToGroup = async () => {
     const localChat = conversationsRaw.value.find((item) => item.id === chatId)
     if (localChat) localChat.epoch = result.epoch
     memberToAdd.value = ''
-    membersMessage.value = 'Membre ajouté. Rotation Megolm et distribution Olm requises avant tout échange.'
+    membersMessage.value = 'Membre ajouté. La protection de la conversation est mise à jour avant la reprise des échanges.'
     await loadGroupMembers(chatId)
     const chat = conversationsRaw.value.find((item) => item.id === chatId)
     if (chat) chat.memberCount = groupMembersMap.value[chatId]?.length
@@ -751,7 +757,7 @@ const removeMemberFromGroup = async (agentId: string) => {
     if (selectedChat.value?.id === chatId) { selectedChat.value.epoch = result.epoch; groupSessionReady.value = false }
     const localChat = conversationsRaw.value.find((item) => item.id === chatId)
     if (localChat) localChat.epoch = result.epoch
-    membersMessage.value = 'Membre retiré. Rotation Megolm et distribution Olm en attente ; les échanges restent bloqués.'
+    membersMessage.value = 'Membre retiré. La protection de la conversation est mise à jour ; les échanges reprendront ensuite.'
     await loadGroupMembers(chatId)
     const chat = conversationsRaw.value.find((item) => item.id === chatId)
     if (chat) chat.memberCount = groupMembersMap.value[chatId]?.length
@@ -816,7 +822,7 @@ const decideGroupRequest = async (request: GroupRequest, approve: boolean) => {
           id: group.id,
           name: request.nomRequest ?? `${request.demandeur.prenom} ${request.demandeur.nom}`.trim(),
           isGroup: true,
-          lastMessage: 'Groupe créé. Initialisation du chiffrement sécurisé.',
+          lastMessage: 'Groupe créé. Préparation de la protection des échanges.',
           time: 'À l’instant',
           classification: 'Normal',
           epoch: group.epoch,
@@ -824,7 +830,7 @@ const decideGroupRequest = async (request: GroupRequest, approve: boolean) => {
           membreIds,
           monRole: 'PARRAIN'
         })
-        groupActionMessage.value = 'Demande approuvée. Le groupe est créé ; ouvrez-le pour initialiser la distribution sécurisée des clés.'
+        groupActionMessage.value = 'Demande approuvée. Le groupe est créé ; ouvrez-le pour préparer la protection des échanges.'
       } else {
         await api.rejectGroupRequest(request.id)
         groupActionMessage.value = 'Demande refusée.'
@@ -1165,14 +1171,15 @@ const applyTheme = (dark: boolean) => {
 const toggleTheme = () => applyTheme(!isDarkMode.value)
 
 onMounted(() => {
+  chatViewMounted = true
   applyTheme(localStorage.getItem('goama-theme') === 'dark')
 
   // Le chiffrement n'est annoncé comme actif que si le runtime Megolm
   // réel a été chargé et initialisé.
-  void megolmService.init().then(() => {
+  const megolmInitialization = megolmService.init().then(() => {
     megolmReady.value = true
   }).catch(() => {
-    errorMessage.value = 'Le moteur Megolm n’est pas initialisé. La messagerie reste en lecture seule.'
+    errorMessage.value = 'La protection des messages n’est pas disponible. La messagerie reste en lecture seule.'
   })
 
   // Le profil doit être chargé AVANT les groupes : leur interprétation
@@ -1180,15 +1187,22 @@ onMounted(() => {
   void (async () => {
     try {
       const account = await api.accountMe()
+      if (!chatViewMounted) return
       authStore.setProfile(account)
       try {
         await publierIdentiteOlm()
       } catch (error) {
-        errorMessage.value = 'Impossible de publier votre identité cryptographique Olm. La messagerie reste bloquée.'
+        errorMessage.value = 'Impossible d’activer la protection des messages. La messagerie reste bloquée.'
         console.warn('Publication identité Olm impossible :', error)
       }
+      // Évite que selectConversation() démarre la création d'une session
+      // avant que le module WASM Megolm ait terminé son initialisation.
+      await megolmInitialization
+      if (!chatViewMounted) return
       await loadWorkspace()
+      if (!chatViewMounted) return
       await Promise.all([refreshPresence(), loadDevices()])
+      if (!chatViewMounted) return
       connectWs()
       presenceTimer = window.setInterval(() => void refreshPresence(), 30000)
     } catch {
@@ -1198,6 +1212,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  chatViewMounted = false
   clearInterval(presenceTimer)
   clearTimeout(wsReconnectTimer)
   wsSocket?.close()
@@ -1395,8 +1410,8 @@ onBeforeUnmount(() => {
             </div>
             <div class="bottom-row">
               <p class="preview">{{ agent.role }}</p>
-              <span v-if="megolmReady" class="security-status">Moteur Megolm chargé</span>
-              <span v-else class="security-status security-warning">E2EE indisponible</span>
+              <span v-if="megolmReady" class="security-status">Protection active</span>
+              <span v-else class="security-status security-warning">Protection indisponible</span>
             </div>
           </div>
         </div>
@@ -1425,9 +1440,9 @@ onBeforeUnmount(() => {
 
         <section class="profile-card profile-security-card">
           <div class="profile-card-title"><span>Sécurité et affichage</span></div>
-          <p>{{ !megolmReady ? 'Megolm n’est pas chargé : aucun échange ne peut être envoyé ou déchiffré.' : (groupSessionReady ? 'La session Megolm de la conversation sélectionnée est prête ; les clés ont été remises aux membres actifs via Olm.' : 'Le moteur est chargé ; la distribution des clés Olm du groupe sélectionné est en cours ou doit être finalisée.') }}</p>
+          <p>{{ !megolmReady ? 'La protection des messages n’est pas disponible. Aucun échange ne peut être envoyé ou déchiffré.' : (groupSessionReady ? 'Cette conversation est protégée. Les participants autorisés peuvent échanger des messages.' : 'La protection de cette conversation est en cours de préparation.') }}</p>
           <div class="profile-details">
-            <div><span>Chiffrement</span><strong>{{ megolmReady ? 'Module chargé' : 'Indisponible' }}</strong></div>
+            <div><span>Protection des messages</span><strong>{{ megolmReady ? 'Active' : 'Indisponible' }}</strong></div>
             <div><span>Session</span><strong>{{ authStore.isAuthenticated ? 'Connectée' : 'Déconnectée' }}</strong></div>
             <div><span>Thème</span><strong>{{ isDarkMode ? 'Mode sombre' : 'Mode clair' }}</strong></div>
           </div>
@@ -1453,10 +1468,10 @@ onBeforeUnmount(() => {
             <div class="chat-title-info">
               <h4>{{ selectedChat.name }}</h4>
               <span class="chat-head-subtitle">
-                <span v-if="!megolmReady" class="security-status security-warning">Megolm indisponible</span>
-                <span v-else-if="!groupSessionReady" class="security-status security-warning">Clé Megolm indisponible — distribution Olm requise</span>
+                <span v-if="!megolmReady" class="security-status security-warning">Protection indisponible</span>
+                <span v-else-if="!groupSessionReady" class="security-status security-warning">Protection en cours…</span>
                 <span v-else-if="statutChatHead" class="chat-online-label">{{ statutChatHead }}</span>
-                <span v-else class="security-status"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>Megolm chargé</span>
+                <span v-else class="security-status"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>Conversation protégée</span>
               </span>
             </div>
           </div>

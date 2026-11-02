@@ -18,9 +18,9 @@ function formatAction(action: string) {
     case "pre_inscription":
       return "Pré-inscription d'un agent";
     case "activation":
-      return "Activation de compte (TOTP validé)";
+      return "Activation de compte (code de vérification validé)";
     case "connexion":
-      return "Ouverture de session (2FA)";
+      return "Ouverture de session sécurisée";
     case "revocation":
       return "Révocation immédiate d'agent";
     case "creation_groupe":

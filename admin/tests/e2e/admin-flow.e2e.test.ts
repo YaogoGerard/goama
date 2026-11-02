@@ -31,7 +31,7 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     expect(wrapper.findComponent(LoginView).exists()).toBe(true);
     expect(wrapper.text()).toContain("Goama");
     expect(wrapper.text()).not.toContain("Connexion Administrateur");
-    expect(wrapper.text()).toContain("Code TOTP");
+    expect(wrapper.text()).toContain("Code de vérification");
     expect(wrapper.find(".shell").exists()).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     await wrapper.find("form").trigger("submit.prevent");
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.text()).toContain("Matricule, mot de passe ou code TOTP invalide.");
+    expect(wrapper.text()).toContain("Identifiant, mot de passe ou code de vérification invalide.");
   });
 
   it("3. Authentifie l'Admin avec le double facteur et bascule sur le tableau de bord", async () => {

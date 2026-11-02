@@ -15,18 +15,12 @@ const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 class ApiClient {
   private token: string | null = null;
+  private refreshInFlight: Promise<boolean> | null = null;
 
-  constructor() {
-    this.token = localStorage.getItem("goama_admin_token");
-  }
+  constructor() {}
 
   setToken(token: string | null) {
     this.token = token;
-    if (token) {
-      localStorage.setItem("goama_admin_token", token);
-    } else {
-      localStorage.removeItem("goama_admin_token");
-    }
   }
 
   getToken(): string | null {
@@ -37,7 +31,29 @@ class ApiClient {
     return !!this.token;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async restoreSession(): Promise<boolean> {
+    // Efface l'ancien stockage local introduit par les versions antérieures.
+    localStorage.removeItem("goama_admin_token");
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = (async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+        if (!response.ok) { this.setToken(null); return false; }
+        const data = await response.json() as { jeton?: string };
+        if (typeof data.jeton !== "string") { this.setToken(null); return false; }
+        this.setToken(data.jeton);
+        return true;
+      } catch {
+        this.setToken(null);
+        return false;
+      } finally {
+        this.refreshInFlight = null;
+      }
+    })();
+    return this.refreshInFlight;
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}, allowRefresh = true): Promise<T> {
     const headers = new Headers(options.headers || {});
     headers.set("Content-Type", "application/json");
 
@@ -47,10 +63,15 @@ class ApiClient {
 
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
+      credentials: "include",
       headers,
     });
 
     if (response.status === 401) {
+      if (allowRefresh && this.token && !endpoint.startsWith("/auth/login") && !endpoint.startsWith("/auth/refresh")) {
+        const restauree = await this.restoreSession();
+        if (restauree) return this.request<T>(endpoint, options, false);
+      }
       this.setToken(null);
       const data = await response.json().catch(() => ({}));
       throw new Error(data.erreur || "session_fermee");

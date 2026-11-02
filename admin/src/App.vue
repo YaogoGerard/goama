@@ -122,8 +122,9 @@ function changeRetentionsPage(page: number) {
   loadData();
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.documentElement.setAttribute("data-theme", theme.value);
+  if (!authenticated.value) authenticated.value = await api.restoreSession();
   if (authenticated.value) {
     loadData();
   }
@@ -238,17 +239,18 @@ onMounted(() => {
 
           <section v-if="retentions.length" class="section">
             <div class="section-head">
-              <h2>Retraits à suivre</h2>
-              <span class="status pending">{{ retentions.length }} en attente</span>
+              <h2>Protection des conversations</h2>
+              <span class="status pending">{{ retentions.filter((item) => item.statut === 'EN_ATTENTE').length }} en attente</span>
             </div>
             <div class="panel retention-list">
               <div v-for="retention in retentions" :key="retention.id" class="retention-item">
                 <div>
-                  <strong>Groupe {{ retention.groupeId.slice(0, 8) }}…</strong>
-                  <small>Agent {{ retention.agentId.slice(0, 8) }}…</small>
+                  <strong>Mise à jour de la protection d’un groupe</strong>
+                  <small>{{ retention.membresAccuses }}/{{ retention.membresAttendus }} participants protégés · {{ retention.recus }}/{{ retention.attendus }} confirmations reçues</small>
+                  <small v-if="retention.erreur">Vérification nécessaire pour terminer cette mise à jour.</small>
                 </div>
-                <span class="status" :class="retention.statut === 'ECHEC' ? 'revoked' : 'pending'">
-                  {{ retention.statut === 'ECHEC' ? "Échec" : "En attente" }}
+                <span class="status" :class="retention.statut === 'ECHEC' ? 'revoked' : retention.statut === 'TERMINE' ? 'active' : 'pending'">
+                  {{ retention.statut === 'ECHEC' ? "Échec" : retention.statut === 'TERMINE' ? "Terminée" : "En attente" }}
                 </span>
               </div>
               <div v-if="retentionsTotalPages > 1" class="pagination">
