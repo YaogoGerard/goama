@@ -91,4 +91,21 @@ describe("Médias chiffrés : stockage, téléchargement et suppression", () => 
     await expect(readFile(objet!.storagePath)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await prisma.mediaObject.findUnique({ where: { id: mediaId } })).toBeNull();
   });
+
+  it("ne dépasse pas le quota agent sous deux téléversements concurrents", async () => {
+    const contenu = Buffer.alloc(400 * 1024, 7);
+    const depot = (nom: string) => {
+      const formulaire = multipartFile(groupeId, contenu, nom);
+      return app.inject({
+        method: "POST",
+        url: "/media",
+        headers: { ...entete(jeton), "content-type": formulaire.contentType },
+        payload: formulaire.body,
+      });
+    };
+
+    const resultats = await Promise.all([depot("quota-a.bin"), depot("quota-b.bin")]);
+    expect(resultats.map((resultat) => resultat.statusCode).sort()).toEqual([201, 413]);
+    expect(resultats.find((resultat) => resultat.statusCode === 413)?.json().erreur).toBe("quota_stockage_agent_depasse");
+  });
 });

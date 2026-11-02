@@ -19,7 +19,7 @@ Le backend est attendu sur `http://localhost:8080` par défaut. `VITE_API_URL` p
 - Les pickles libolm sont chiffrés par AES-GCM avant stockage IndexedDB ; la clé WebCrypto est non extractible.
 - Les fichiers restent chiffrés par clé AES-GCM aléatoire par fichier ; cette clé doit être incluse dans un message Megolm.
 
-**Blocage de sécurité connu :** l’échange de clés de session Megolm entre agents (un appareil par agent) doit être enveloppé dans une session Olm authentifiée. Le moteur fournit les primitives d'import/export, mais l'enrôlement des clés Curve25519/Ed25519, les pré-clés à usage unique, la négociation Olm, la distribution aux agents autorisés et les accusés de réception ne sont pas encore reliés au backend. En conséquence, cette livraison n’est pas une messagerie E2EE multi-membre opérationnelle et ne doit pas être utilisée avec des données réelles. Il est interdit de transmettre `sessionKey` en clair au serveur.
+Le flux multi-agent est raccordé au backend : identités et pré-clés signées, sessions Olm, distribution Megolm par destinataire et accusés de réception après import local. Le serveur ne reçoit jamais `sessionKey` en clair. Un scénario live avec trois navigateurs indépendants a validé la création du groupe, trois messages croisés et deux transferts de fichiers chiffrés.
 
 ## Rotation et révocation
 
@@ -32,4 +32,4 @@ npm run build
 npm run test:e2e
 ```
 
-Les tests E2E UI ne remplacent pas les tests cryptographiques de bout en bout. Avant activation, ajouter des tests avec deux comptes distincts sur leurs appareils uniques : partage Olm vérifié, messages Megolm, anti-rejeu, rotation, retrait et impossibilité pour l’ancien membre de déchiffrer les messages postérieurs.
+Le scénario live et les tests E2E UI ne remplacent pas une revue cryptographique indépendante ni les tests adversariaux. Avant activation institutionnelle, compléter la vérification hors bande des empreintes TOFU, la révocation avec membre hors ligne, l’anti-rejeu et la preuve qu’un membre retiré ne peut pas déchiffrer les messages postérieurs.

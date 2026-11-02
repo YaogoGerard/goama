@@ -2,6 +2,13 @@
 
 **Statut :** procédure opératoire proposée, à valider sur l'infrastructure cible avant production. La réussite des builds ne constitue ni une homologation ni une certification de sécurité.
 
+## 0. Contrôles locaux déjà exécutés
+
+- Suite backend PostgreSQL isolée : **13 fichiers, 39 tests passés**, migrations appliquées sur une base temporaire.
+- Scénario live Chromium à trois agents : création du groupe, trois messages croisés, deux transferts de fichiers et téléchargements vérifiés ; **aucune erreur navigateur**.
+- `/healthz`, `/readyz`, CSP et en-têtes de sécurité vérifiés sur les frontends locaux.
+- Les contrôles ci-dessus ne remplacent pas une restauration sur stockage externe, un test de charge, une revue cryptographique ou une homologation institutionnelle.
+
 ## 1. Prérequis et topologie
 
 - Docker Engine et Docker Compose v2 à jour, avec prise en charge des secrets Compose file-backed.
