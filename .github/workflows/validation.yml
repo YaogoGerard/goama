@@ -11,6 +11,8 @@ jobs:
   backend:
     name: Backend — migrations et tests isolés
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
     defaults:
       run:
         working-directory: backend
