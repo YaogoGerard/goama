@@ -31,8 +31,9 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  await auth.initialize()
   if (to.name === 'Chat' && !auth.isAuthenticated) return { name: 'Login' }
   if (to.name === 'Login' && auth.isAuthenticated) return { name: 'Chat' }
 })

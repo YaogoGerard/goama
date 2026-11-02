@@ -73,8 +73,13 @@ const RETENTIONS: Retention[] = [
     id: "r-1",
     groupeId: "9f3a2b4c-6d8e-4f0a-b1c2-3d4e5f6a7b8c",
     agentId: "ag-5-uuid-café",
+    epoch: 1,
     statut: "EN_ATTENTE",
     erreur: null,
+    membresAttendus: 2,
+    membresAccuses: 0,
+    recus: 0,
+    attendus: 2,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -219,8 +224,8 @@ describe("Parcours complémentaires de l'interface Admin — Goama", () => {
     // Retour au tableau de bord
     await navBtns.find((b) => b.text().includes("Vue d’ensemble"))!.trigger("click");
     await wrapper.vm.$nextTick();
-    // Le panneau Retraits à suivre apparaît (1 en attente)
-    expect(wrapper.text()).toContain("Retraits à suivre");
+    // Le panneau de suivi des rotations apparaît (1 en attente)
+    expect(wrapper.text()).toContain("Protection des conversations");
     expect(wrapper.text()).toContain("1 en attente");
   });
 

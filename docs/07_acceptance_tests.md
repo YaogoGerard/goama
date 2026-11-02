@@ -34,9 +34,9 @@
 | T-028 | Consulter l'aide de l'accusé « Lu » | Texte : atteste l'affichage par un appareil enrôlé, sans valeur légale garantie | REQ-RCPT-006 | M |
 | T-029 | Rechercher des agents par ministère puis par fonction ; lire une fiche d'annuaire côté agent | Seuls les agents correspondants ; le matricule n'est pas affiché | REQ-DIR-001, REQ-DIR-006 | A |
 | T-030 | Se connecter, puis couper le navigateur sans se déconnecter | Présence mise à jour toutes les 15 s ; « hors ligne » au plus 40 s après le dernier signal | REQ-DIR-002 | A |
-| T-031 | Vérifier la base PostgreSQL après plusieurs connexions | Aucune trace de présence en base ; l'état n'est que dans Redis | REQ-DIR-003 | A |
+| T-031 | Vérifier la base PostgreSQL après plusieurs connexions | La présence est partagée dans PostgreSQL et aucune donnée de présence ne contient de contenu de message ou de clé | REQ-DIR-003 | A |
 | T-032 | Un agent sans conversation commune demande la présence d'un autre | Présence non visible | REQ-DIR-004 | A |
-| T-033 | Deux instances de l'API ; un agent connecté à l'une, son interlocuteur à l'autre | Le changement de présence est propagé par Redis | REQ-DIR-005, REQ-OPS-006 | A |
+| T-033 | Deux instances de l'API ; un agent connecté à l'une, son interlocuteur à l'autre | Le changement de présence est visible depuis l'autre instance via PostgreSQL | REQ-DIR-005, REQ-OPS-006 | A |
 | T-034 | Envoyer un message Confidentiel ; inspecter le serveur | Le niveau est lisible chez le destinataire ; le serveur ne le voit pas | REQ-CLS-001 | A |
 | T-035 | Tenter de transférer, copier ou exporter un message restreint ou confidentiel | Actions indisponibles | REQ-CLS-002 | M |
 | T-036 | Message Confidentiel avec expiration de 1 min ; essayer 8 jours | Supprimé à l'expiration ; plus de 7 jours refusé | REQ-CLS-003 | A |
@@ -50,17 +50,17 @@
 | T-044 | Pré-inscrire, activer, révoquer, échouer 5 connexions ; inspecter journaux d'audit et journaux techniques | Tous les événements présents ; aucun texte, fichier, secret ni clé | REQ-AUD-001, REQ-AUD-002 | A |
 | T-045 | Lire le journal avec un agent ; avancer l'horloge de 91 jours | Agent refusé ; entrées de plus de 90 jours purgées | REQ-AUD-003, REQ-AUD-004 | A |
 | T-046 | 6 tentatives de connexion en 1 min depuis une IP | La 6e : 429 avec Retry-After, sans détail interne | REQ-ABUSE-001, REQ-ABUSE-004 | A |
-| T-047 | 61 messages en 1 min ; 31 demandes de clé de session Megolm ; 31 opérations d'administration ; 2 instances de l'API | Dépassements refusés (429) ; compteurs cumulés sur les deux instances | REQ-ABUSE-002, REQ-ABUSE-003, REQ-ABUSE-006, REQ-ABUSE-007 | A |
+| T-047 | 61 messages en 1 min ; 31 demandes de clé de session Megolm ; 31 opérations d'administration ; 2 instances de l'API | Dépassements refusés (429) ; compteurs PostgreSQL cumulés sur les deux instances, sans fenêtre de contournement au basculement. | REQ-ABUSE-002, REQ-ABUSE-003, REQ-ABUSE-006, REQ-ABUSE-007 | A |
 | T-048 | Vérifier le protocole et la distribution de clés | Megolm `m.megolm.v1.aes-sha2` + partage de clé via Olm authentifié ; aucune clé brute côté serveur | REQ-SEC-001 | A |
 | T-049 | Connexion en clair puis en TLS 1.1 | Refusée | REQ-SEC-005 | A |
-| T-050 | Comparer la liste des métadonnées documentée (`06_architecture_decisions.md` §9) avec la base, Redis et les journaux | Aucune métadonnée non documentée | REQ-SEC-008 | M |
+| T-050 | Comparer la liste des métadonnées documentée (`06_architecture_decisions.md` §9) avec la base PostgreSQL et les journaux | Aucune métadonnée non documentée | REQ-SEC-008 | M |
 | T-051 | Examiner les en-têtes HTTP, les scripts chargés, l'empreinte du fichier WebAssembly | Politique de contenu stricte ; aucun script tiers ; intégrité contrôlée | REQ-SEC-009, REQ-SEC-012 | A |
 | T-052 | Créer 100 groupes ; avancer l'horloge de 8 jours ; lister les versions de dépendances | Identifiants non séquentiels ; IP de plus de 7 jours purgées ; versions figées | REQ-SEC-010, REQ-SEC-011 | A |
 | T-053 | Provoquer une erreur 500 pendant un envoi | Échec affiché, jamais présenté comme un succès | REQ-REL-001 | A |
 | T-054 | Couper le réseau, envoyer 3 messages, rétablir | Réseau signalé ; messages en file puis envoyés dans l'ordre ; rattrapage par séquence | REQ-REL-002, REQ-REL-003 | M |
-| T-055 | Sur une machine vierge, lancer `docker compose up -d` | Tous les services sains ; migrations appliquées ; comptes de démonstration disponibles | REQ-OPS-001 | M |
+| T-055 | Sur une machine vierge, préparer les secrets et la configuration d'exploitation puis lancer `docker compose --env-file .env up -d` | Tous les services sains ; migrations appliquées ; seul l'administrateur explicitement provisionné existe ; aucun secret dans les journaux | REQ-OPS-001, REQ-OPS-002 | M |
 | T-056 | Scanner le dépôt à la recherche de secrets ; démarrer l'API sans secret | Aucun secret dans le dépôt ; échec contrôlé avec message explicite | REQ-OPS-002 | A |
-| T-057 | Révoquer un agent ; vider puis redémarrer Redis et l'API | Le révoqué reste refusé ; la liste est rechargée depuis PostgreSQL ; le cache d'autorisation est invalidé dès la révocation | REQ-OPS-003, REQ-OPS-004 | A |
+| T-057 | Révoquer un agent ; redémarrer l'API et vérifier PostgreSQL | Le révoqué reste refusé ; l'état d'autorisation est rechargé depuis PostgreSQL et invalidé dès la révocation | REQ-OPS-003, REQ-OPS-004 | A |
 | T-058 | Appeler /healthz et /readyz, puis arrêter PostgreSQL | /healthz répond ; /readyz répond 503 | REQ-OPS-005 | A |
 | T-059 | Lire /metrics après une activité de test | Connexions, débit, latence, erreurs et 429 présents | REQ-OPS-007 | A |
 | T-060 | Suivre la procédure de sauvegarde, restaurer sur une machine vierge | Comptes et données chiffrées retrouvés | REQ-OPS-008 | M |
@@ -70,12 +70,17 @@
 | T-064 | Un parrain d'un autre ministère valide la demande d'un agent | Validation acceptée ; groupe interministériel créé ; validation auditée avec l'identité du parrain | REQ-GRP-002 | A |
 | T-065 | Un agent sans capacité de parrainage tente de créer un groupe directement, puis de valider une demande | Les deux refusés ; seul le chemin de la demande lui est ouvert | REQ-AUTHZ-005, REQ-AUTHZ-006 | A |
 | T-066 | Le créateur puis le parrain ajoutent et retirent des membres, renomment, promeuvent un co-parrain, suppriment le groupe | Chaque changement de membres déclenche une rotation Megolm et un partage Olm sécurisé ; le compteur de génération Goama est incrémenté ; les deux rôles disposent des mêmes capacités | REQ-GRP-004 | A |
-| T-067 | Renommer un groupe, puis inspecter PostgreSQL, Redis et les journaux | Le nom n'apparaît nulle part en clair côté serveur | REQ-GRP-006 | A |
-| T-068 | Un membre quitte ; le parrain suspend puis reprend ; le dernier parrain quitte | Départ effectif par rotation Megolm ; publications gelées puis rétablies ; groupe gelé et signalé au tableau de bord | REQ-GRP-007, REQ-GRP-008, REQ-GRP-009 | M |
-| T-069 | L'Administrateur cherche une opération de groupe dans le tableau de bord | Aucune opération de groupe n'est proposée ni acceptée | REQ-GRP-005 | A |
-| T-070 | Sur une installation vierge, lancer la commande d'amorçage, puis la relancer | Le premier Administrateur existe avec un mot de passe provisoire ; le second appel est refusé | REQ-OPS-012 | A |
-| T-071 | Chercher dans le tableau de bord et dans l'API une opération de suppression définitive de compte ; révoquer un agent et relire son annuaire | Aucune opération de suppression n'existe ; le compte révoqué reste consultable avec son statut | REQ-OPS-013 | A |
-| T-072 | Se déconnecter volontairement puis se reconnecter avec les mêmes identifiants sur le même appareil ; attendre l'expiration de session (12 h) et se reconnecter | Reconnexion acceptée dans les deux cas, sans intervention administrative ; l'appareil reste enrôlé et le compte actif | REQ-ID-010 | A |
+| T-067 | Retirer un membre d'un groupe de N membres et tenter d'envoyer des messages avant les reçus | Chaque membre restant importe les clés de chaque autre membre ; N×(N−1) reçus distincts sont enregistrés ; la rotation ne passe à `TERMINE` qu'à la réception du dernier reçu ; un membre hors ligne maintient l'état `EN_ATTENTE` | REQ-SEC-001, REQ-REV-008 | A |
+| T-068 | Présenter un reçu avec mauvais epoch, un sender hors groupe, un partage absent ou un membre révoqué | Reçu refusé ; statut de rotation non avancé | REQ-SEC-001 | A |
+| T-069 | Réutiliser simultanément un même jeton de renouvellement dans deux requêtes | Une seule rotation du jeton réussit ; la seconde requête est refusée | REQ-ID-007 | A |
+| T-070 | Télécharger/supprimer/purger un média pendant une panne filesystem ou DB ; dépasser simultanément quotas agent et groupe | Métadonnées et blobs restent réconciliables ; aucune suppression DB avant suppression physique confirmée ; quotas non dépassés sous concurrence | REQ-FILE-001 à 004 | A |
+| T-071 | Connecter le même agent à deux instances API, révoquer sa session, puis couper et rétablir PostgreSQL LISTEN/NOTIFY | Une seule socket active ; présence partagée ; événements relayés aux sockets des autres instances ; perte de notification récupérée par REST et vérification périodique de session | REQ-OPS-003, REQ-OPS-004 | A |
+| T-073 | Renommer un groupe, puis inspecter PostgreSQL et les journaux | Le nom n'apparaît nulle part en clair côté serveur | REQ-GRP-006 | A |
+| T-074 | Un membre quitte ; le parrain suspend puis reprend ; le dernier parrain quitte | Départ effectif par rotation Megolm ; publications gelées puis rétablies ; groupe gelé et signalé au tableau de bord | REQ-GRP-007, REQ-GRP-008, REQ-GRP-009 | M |
+| T-075 | L'Administrateur cherche une opération de groupe dans le tableau de bord | Aucune opération de groupe n'est proposée ni acceptée | REQ-GRP-005 | A |
+| T-076 | Sur une installation vierge, lancer la commande d'amorçage, puis la relancer | Le premier Administrateur existe avec les identifiants explicitement fournis ; le second appel ne crée aucun second compte | REQ-OPS-012 | A |
+| T-077 | Chercher dans le tableau de bord et dans l'API une opération de suppression définitive de compte ; révoquer un agent et relire son annuaire | Aucune opération de suppression n'existe ; le compte révoqué reste consultable avec son statut | REQ-OPS-013 | A |
+| T-078 | Se déconnecter volontairement puis se reconnecter avec les mêmes identifiants sur le même appareil ; attendre l'expiration de session (12 h) et se reconnecter | Reconnexion acceptée dans les deux cas, sans intervention administrative ; l'appareil reste enrôlé et le compte actif | REQ-ID-010 | A |
 
 ## Matrice de couverture (générée et vérifiée)
 
@@ -101,11 +106,11 @@
 | REQ-GRP-002 | P0 | T-064 |
 | REQ-GRP-003 | P0 | T-063 |
 | REQ-GRP-004 | P0 | T-066 |
-| REQ-GRP-005 | P0 | T-069 |
-| REQ-GRP-006 | P1 | T-067 |
-| REQ-GRP-007 | P1 | T-068 |
-| REQ-GRP-008 | P1 | T-068 |
-| REQ-GRP-009 | P1 | T-068 |
+| REQ-GRP-005 | P0 | T-075 |
+| REQ-GRP-006 | P1 | T-073 |
+| REQ-GRP-007 | P1 | T-074 |
+| REQ-GRP-008 | P1 | T-074 |
+| REQ-GRP-009 | P1 | T-074 |
 | REQ-MSG-001 | P0 | T-014 |
 | REQ-MSG-002 | P0 | T-014 |
 | REQ-MSG-003 | P0 | T-015 |
@@ -182,8 +187,8 @@
 | REQ-OPS-009 | P1 | T-061 |
 | REQ-OPS-010 | P2 | reporté (P2) |
 | REQ-OPS-011 | P1 | T-062 |
-| REQ-OPS-012 | P0 | T-070 |
-| REQ-OPS-013 | P0 | T-071 |
+| REQ-OPS-012 | P0 | T-076 |
+| REQ-OPS-013 | P0 | T-077 |
 
 ## Fiche de preuve (à remplir pour chaque test)
 

@@ -2,21 +2,55 @@ import type { OlmMemberBundle, OlmPublishedBundle } from '../crypto/olm'
 
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : '/api')
 
+// Le jeton d'accès ne vit que dans la mémoire du document. Le cookie de
+// renouvellement est HttpOnly et n'est jamais accessible au JavaScript.
+let accessToken: string | null = null
+let refreshInFlight: Promise<string | null> | null = null
+
+export function setAccessToken(token: string | null) {
+  accessToken = token
+}
+
+async function renouvelerJetonAcces(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' })
+      if (!response.ok) { accessToken = null; return null }
+      const body = await response.json() as { jeton?: string }
+      accessToken = typeof body.jeton === 'string' ? body.jeton : null
+      return accessToken
+    } catch {
+      accessToken = null
+      return null
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
 async function readApiError(response: Response): Promise<string> {
   const body = await response.json().catch(() => null) as { erreur?: string; message?: string } | null
   return body?.erreur ?? body?.message ?? `http_${response.status}`
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('goama_token')
-  const response = await fetch(`${API_URL}${path}`, {
+  const hasBody = options.body !== undefined && options.body !== null
+  const envoyer = () => fetch(`${API_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
-      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(hasBody && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers ?? {})
     }
   })
+  let response = await envoyer()
+  if (response.status === 401 && accessToken && path !== '/auth/refresh' && !path.startsWith('/auth/connexion') && !path.startsWith('/auth/login')) {
+    const token = await renouvelerJetonAcces()
+    if (token) response = await envoyer()
+  }
   if (!response.ok) throw new Error(await readApiError(response))
   if (response.status === 204) return undefined as T
   const contentType = response.headers.get('content-type') ?? ''
@@ -27,14 +61,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function requestBinary(path: string, options: RequestInit = {}): Promise<Blob> {
-  const token = localStorage.getItem('goama_token')
-  const response = await fetch(`${API_URL}${path}`, {
+  const envoyer = () => fetch(`${API_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers ?? {})
     }
   })
+  let response = await envoyer()
+  if (response.status === 401 && accessToken) {
+    const token = await renouvelerJetonAcces()
+    if (token) response = await envoyer()
+  }
   if (!response.ok) throw new Error(await readApiError(response))
   return response.blob()
 }
@@ -166,6 +205,11 @@ export const api = {
       method: 'POST', body: JSON.stringify({ claimFor })
     })
   },
+  acknowledgeGroupKey(groupId: string, epoch: number, senderId: string) {
+    return request<{ ok: boolean; enCours: boolean; recus: number; attendus: number }>(`/groupes/${groupId}/rotation/ack`, {
+      method: 'POST', body: JSON.stringify({ epoch, senderId })
+    })
+  },
   enrollDevice(payload: { matricule: string; code: string; publicKey: string; label: string }) {
     return request<{ deviceId: string }>('/devices/enroll', { method: 'POST', body: JSON.stringify(payload) })
   },
@@ -206,7 +250,7 @@ export const api = {
 // la socket (jamais dans l'URL — REQ-OPS-005) ; la socket ne sert qu'à
 // RECEVOIR. Un battement de cœur ping/pong la maintient ouverte.
 export function connectNotifications(onEvent: (event: { type?: string; [key: string]: unknown }) => void) {
-  const token = localStorage.getItem('goama_token')
+  const token = accessToken
   if (!token || typeof WebSocket === 'undefined') return null
 
   const base = API_URL.startsWith('http')

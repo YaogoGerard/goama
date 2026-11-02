@@ -99,7 +99,7 @@ const activate = async () => {
       </form>
 
       <div v-else class="grid justify-items-center gap-4 text-center">
-        <img :src="qrCode" alt="QR code de configuration TOTP" class="size-[220px] rounded-lg border border-[#d8d1c4] p-2">
+        <img :src="qrCode" alt="QR code de configuration de sécurité" class="size-[220px] rounded-lg border border-[#d8d1c4] p-2">
         <p class="text-xs text-[#655d50]">Dans Google Authenticator, choisissez « Scanner un QR code ».</p>
         <code class="max-w-full break-all rounded-lg bg-[#f1ebdd] px-3 py-2 text-xs text-[#655d50]">{{ activation.totpSecret }}</code>
         <RouterLink to="/" class="text-sm font-semibold text-[#8b6400] hover:underline">Accéder à la connexion</RouterLink>

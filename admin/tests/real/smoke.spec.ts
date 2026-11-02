@@ -2,22 +2,24 @@ import { test, expect, type Page } from "@playwright/test";
 import { totp } from "./totp.js";
 
 // ============================================================
-// Smoke test RÉEL : admin navigueur → API Docker → PostgreSQL.
-// Aucune brique n'est simulée. Données de démonstration uniquement.
+// Smoke test RÉEL : admin navigateur → API Docker → PostgreSQL.
+// Aucun compte ou secret de démonstration n'est codé dans le dépôt.
 // ============================================================
 
-let secretTotp = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"; // compte ADMIN001, backend/DEMO_ACCOUNTS.md
+const secretTotp = process.env.GOAMA_REAL_ADMIN_TOTP ?? "";
 
 const CREDS = {
-  matricule: "ADMIN001",
-  motDePasse: "GoamaAdmin2026!",
+  matricule: process.env.GOAMA_REAL_ADMIN_MATRICULE ?? "",
+  motDePasse: process.env.GOAMA_REAL_ADMIN_PASSWORD ?? "",
 };
 
 async function seConnecter(page: Page) {
+  test.skip(!secretTotp || !CREDS.matricule || !CREDS.motDePasse,
+    "Définir GOAMA_REAL_ADMIN_MATRICULE, GOAMA_REAL_ADMIN_PASSWORD et GOAMA_REAL_ADMIN_TOTP pour le smoke test réel.");
   await page.goto("/");
   await page.getByLabel(/Identifiant/i).fill(CREDS.matricule);
   await page.getByLabel("Mot de passe", { exact: true }).fill(CREDS.motDePasse);
-  await page.getByLabel(/Code TOTP/i).fill(totp(secretTotp));
+  await page.getByLabel(/Code de vérification/i).fill(totp(secretTotp));
   await page.getByRole("button", { name: /continuer/i }).click();
 
   // En cas de bascule de période TOTP (fenêtre de 30 s), un second essai
@@ -25,7 +27,7 @@ async function seConnecter(page: Page) {
   try {
     await page.getByText("Vue d’ensemble", { exact: false }).first().waitFor({ timeout: 5_000 });
   } catch {
-    await page.getByLabel(/Code TOTP/i).fill(totp(secretTotp));
+    await page.getByLabel(/Code de vérification/i).fill(totp(secretTotp));
     await page.getByRole("button", { name: /continuer/i }).click();
   }
 }
@@ -34,7 +36,7 @@ test.describe("Parcours réel Admin Goama (stack Docker)", () => {
   test("1. L'écran de connexion 2FA est servi par l'admin conteneurisé", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText(/Goama|Administration/i).first()).toBeVisible();
-    await expect(page.getByLabel(/Code TOTP/i)).toBeVisible();
+    await expect(page.getByLabel(/Code de vérification/i)).toBeVisible();
     // Favicon réel bien servi
     const res = await page.request.get("/favicon.ico");
     expect(res.status()).toBe(200);
@@ -71,9 +73,9 @@ test.describe("Parcours réel Admin Goama (stack Docker)", () => {
     await seConnecter(page);
 
     await page.getByRole("button", { name: /Déconnexion/i }).click();
-    await expect(page.getByLabel(/Code TOTP/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel(/Code de vérification/i)).toBeVisible({ timeout: 10_000 });
 
-    // Le jeton est réellement supprimé du stockage local
+    // Le jeton d'accès n'est jamais conservé dans le stockage local.
     const jeton = await page.evaluate(() => localStorage.getItem("goama_admin_token"));
     expect(jeton).toBeNull();
   });

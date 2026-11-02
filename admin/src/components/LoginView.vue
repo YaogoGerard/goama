@@ -15,7 +15,7 @@ const error = ref<string | null>(null);
 
 async function submitLogin() {
   if (!matricule.value || !secret.value || !codeTotp.value) {
-    error.value = "Veuillez renseigner tous les champs (y compris le code TOTP).";
+    error.value = "Veuillez renseigner tous les champs (y compris le code de vérification).";
     return;
   }
 
@@ -27,7 +27,7 @@ async function submitLogin() {
     emit("login-success");
   } catch (err: any) {
     if (err.message === "identifiants_invalides") {
-      error.value = "Matricule, mot de passe ou code TOTP invalide.";
+      error.value = "Identifiant, mot de passe ou code de vérification invalide.";
     } else if (err.message === "trop_de_requetes") {
       error.value = "Trop de tentatives. Veuillez patienter avant de réessayer.";
     } else {
@@ -105,7 +105,7 @@ async function submitLogin() {
 
         <div class="form-group">
           <label for="codeTotp">
-            <span>Code TOTP</span>
+            <span>Code de vérification</span>
             <small class="label-hint">6 chiffres</small>
           </label>
           <input
