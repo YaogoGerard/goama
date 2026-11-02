@@ -141,7 +141,27 @@ for (const compte of COMPTES_DEMONSTRATION) {
 }
 
 if (crees > 0) {
-  console.log(`${crees} compte(s) d'amorçage créés — identifiants documentés dans backend/DEMO_ACCOUNTS.md.`);
+  console.log(`${crees} compte(s) d'amorçage créé(s).`);
 }
+
+// Bloc d'identifiants de connexion : affiché à chaque démarrage de l'API
+// (donc à chaque `docker compose up`), indépendamment des créations du jour.
+const webUrl = process.env.PUBLIC_WEB_URL ?? "http://localhost:3000";
+const adminUrl = process.env.PUBLIC_ADMIN_URL ?? "http://localhost:5173";
+console.log("");
+console.log("================================================================");
+console.log(" Goama — comptes de démonstration prêts à l'emploi");
+console.log(`   Messagerie agent : ${webUrl}`);
+console.log(`   Administration   : ${adminUrl}`);
+console.log(`   API              : ${process.env.PUBLIC_API_URL ?? "http://localhost:8080"}`);
+console.log("");
+console.log("   Matricule   Mot de passe      Secret TOTP");
+for (const compte of COMPTES_DEMONSTRATION) {
+  console.log(`   ${compte.matricule.padEnd(12)}${compte.motDePasse.padEnd(17)}${compte.totp}`);
+}
+console.log("");
+console.log("   Détails et provisionnement réel : backend/DEMO_ACCOUNTS.md");
+console.log("================================================================");
+console.log("");
 
 await prisma.$disconnect();

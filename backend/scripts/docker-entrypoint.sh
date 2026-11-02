@@ -28,14 +28,8 @@ ensure_secret() {
 ensure_secret JWT_SECRET
 ensure_secret TOTP_ENCRYPTION_KEY
 
-# 3. Comptes d'amorçage (administrateur + agents de démonstration).
+# 3. Comptes d'amorçage (administrateur + agents de démonstration) et
+#    affichage des identifiants de connexion dans les journaux.
 node dist/bootstrap-accounts.js
-
-echo ""
-echo "Goama est disponible :"
-echo "  Web   : ${PUBLIC_WEB_URL:-http://localhost:3000}"
-echo "  Admin : ${PUBLIC_ADMIN_URL:-http://localhost:5173}"
-echo "  API   : ${PUBLIC_API_URL:-http://localhost:8080}"
-echo ""
 
 exec "$@"
