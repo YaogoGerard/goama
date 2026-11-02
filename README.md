@@ -1,4 +1,28 @@
-# Goama — messagerie souveraine de l'administration
+<div align="center">
+
+<img src="docs/design/logo_removedbg.png" alt="Goama" width="200"/>
+
+# Goama
+
+**Messagerie souveraine et chiffrée de bout en bout pour l'administration publique**
+
+*Le serveur relaye, il ne lit jamais.*
+
+[![License: MIT](https://img.shields.io/badge/Licence-MIT-1a1a1e?style=flat-square)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white)](https://vuejs.org)
+[![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white)](https://fastify.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io)
+[![Docker Compose](https://img.shields.io/badge/Deployment-Docker%20Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+[![E2EE: Olm + Megolm](https://img.shields.io/badge/E2EE-Olm%20%2B%20Megolm%20(WASM)-ef6c20?style=flat-square)](https://gitlab.matrix.org/matrix-org/olm)
+[![Souveraineté: auto-hébergé](https://img.shields.io/badge/Souverainet%C3%A9-auto%2Dh%C3%A9berg%C3%A9-1a1a52?style=flat-square)](docs/NOTE_SECURITE.md)
+
+</div>
+
+---
 
 **Équipe projet :** Codalchemists — Burkina Institute of Technology, Koudougou
 **Dépôt :** https://github.com/YaogoGerard/goama
