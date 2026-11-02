@@ -68,6 +68,10 @@ export function enregistrerRoutesDevices(app: FastifyInstance) {
         })
       : null;
     if (!agent || !authorization || agent.statut !== "ACTIF") throw new ErreurApi(400, "code_invalide");
+    // Valeurs extraites avant la transaction : le rétrécissement TS d'un
+    // champ optionnel ne traverse pas la closure async de `$transaction`.
+    const label = body.label.trim();
+    const publicKey = body.publicKey.trim();
     const device = await prisma.$transaction(async (tx) => {
       // Verrouiller l'agent sérialise deux enrôlements concurrents du même compte.
       await tx.$queryRaw`SELECT id FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
@@ -85,8 +89,8 @@ export function enregistrerRoutesDevices(app: FastifyInstance) {
       return tx.device.create({
         data: {
           agentId: agent.id,
-          label: body.label.trim(),
-          publicKey: body.publicKey.trim(),
+          label,
+          publicKey,
           statut: "ENROLED",
           enrolledAt: new Date(),
         },
@@ -137,12 +141,15 @@ export function enregistrerRoutesDevices(app: FastifyInstance) {
       let claimedFor: Record<string, unknown> = {};
       let availableKeys: typeof bundle.oneTimeKeys = [];
       if (previous) {
-        let old: {
+        // Type nommé ET non auto-référencé : TypeScript 6 résout « as typeof old »
+        // avec la valeur courante (null), ce qui rétrécit old à never.
+        type AncienPaquet = {
           deviceKeys?: typeof bundle.deviceKeys;
           claimedFor?: Record<string, unknown>;
           oneTimeKeys?: typeof bundle.oneTimeKeys;
-        } | null = null;
-        try { old = JSON.parse(previous.payload) as typeof old; }
+        };
+        let old: AncienPaquet | null = null;
+        try { old = JSON.parse(previous.payload) as AncienPaquet; }
         catch { /* ancien paquet MLS illisible : on repart sur une identité Olm propre */ }
         if (old) {
           const sameIdentity = canonicalJson(old.deviceKeys) === canonicalJson(bundle.deviceKeys);

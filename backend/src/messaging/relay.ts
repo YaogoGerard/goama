@@ -5,7 +5,7 @@
 // Le serveur relaie uniquement des enveloppes chiffrées et ne déchiffre jamais
 // le contenu des messages.
 // =====================================================================
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
 
 type Evenement =
   | { type: "message"; groupeId: string; seq: number; epoch: number; kind: string; content: string; de: string }
@@ -31,7 +31,7 @@ class Relais {
 
   versAgent(agentId: string, evenement: Evenement): void {
     const ws = this.sockets.get(agentId);
-    if (ws?.readyState === ws.OPEN) ws.send(JSON.stringify(evenement));
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(evenement));
   }
 
   versGroupe(agentIds: string[], evenement: Evenement): void {
@@ -40,7 +40,7 @@ class Relais {
 
   fermerAgent(agentId: string, code = 4003): void {
     const ws = this.sockets.get(agentId);
-    if (ws?.readyState === ws.OPEN) ws.close(code, "revoque");
+    if (ws?.readyState === WebSocket.OPEN) ws.close(code, "revoque");
     this.sockets.delete(agentId);
   }
 

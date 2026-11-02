@@ -3,7 +3,6 @@
 // PRINCIPE DIRECTEUR : le serveur ne stocke AUCUN contenu en clair.
 // Les messages, les noms de groupes et les clés de fichiers ne sont que
 // des blobs chiffrés opaques (base64) que le serveur ne sait pas ouvrir.
-// (Épreuve du jury « Le serveur ne lit rien » — règle éliminatoire.)
 // =====================================================================
 
 // Prisma 7 : l'URL de connexion vit dans prisma.config.ts (CLI/migrations),

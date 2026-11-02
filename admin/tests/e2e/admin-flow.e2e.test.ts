@@ -97,7 +97,7 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     expect(wrapper.text()).toContain("TRAORÉ");
   });
 
-  it("4. Modal de pré-inscription : émet le code 24 h à usage unique (REQ-ID-002)", async () => {
+  it("4. Modal de pré-inscription : émet le lien d'activation du code 24 h à usage unique (REQ-ID-002)", async () => {
     vi.spyOn(api, "preInscrire").mockResolvedValue({
       agentId: "new-agent-uuid",
       codeActivation: "E8F291B4",
@@ -114,11 +114,12 @@ describe("E2E Admin Workflow — Goama Administration", () => {
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
 
-    // Vérifie l'affichage du code à 8 caractères
+    // Vérifie l'affichage du lien d'activation contenant le code à 8 caractères
     expect(wrapper.text()).toContain("Agent pré-inscrit avec succès");
     expect(wrapper.text()).toContain("E8F291B4");
     expect(wrapper.text()).toContain("valable 24 h");
-    expect(wrapper.text()).toContain("Copier le code");
+    expect(wrapper.text()).toContain("Transmettez ce lien à l’agent");
+    expect(wrapper.text()).toContain("Copier le lien");
   });
 
   it("5. Révocation immédiate d'un agent avec coupure d'accès (ADR-08 / REQ-REV-001)", async () => {
