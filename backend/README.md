@@ -26,12 +26,13 @@ npm ci
 cp .env.example .env       # puis renseigner les secrets (voir .env.example)
 npm run db:deploy          # prisma migrate deploy
 npm run build
-npm test                   # vitest, base PostgreSQL requise
+npm test                   # vitest, TEST_DATABASE_URL explicite requis
+npm run test:isolated      # PostgreSQL temporaire Docker + migrations + suite complète
 ```
 
-À la racine du dépôt, `docker compose up` construit la stack en mode production, applique les migrations et provisionne automatiquement les comptes d'amorçage (1 administrateur + 3 agents de démonstration ; voir `DEMO_ACCOUNTS.md`). Les secrets applicatifs sont générés au premier démarrage de l'API et persistés dans un volume Docker ; aucun fichier `.env` n'est requis pour la stack. Le fichier `.env.example` sert uniquement au développement local sans Docker.
+À la racine du dépôt, le déploiement Compose est strictement configuré pour la production : il applique les migrations et provisionne uniquement l'administrateur explicitement déclaré. Aucun compte de démonstration ni secret par défaut n'est créé. Les secrets JWT, TOTP, demandes de groupe, PostgreSQL et TOTP administrateur sont injectés par fichiers Docker Secrets. Voir `../docs/DEPLOIEMENT_SECURITE.md` avant d'exécuter Compose ; `.env.example` ne sert qu'au développement local.
 
-Descriptions des variables dans `.env.example` ; les secrets sont exclus du dépôt et chiffrés au repos lorsque le serveur en détient (`TOTP_ENCRYPTION_KEY`).
+Descriptions des variables de développement dans `.env.example`. En production, les secrets applicatifs sont conservés hors du dépôt et protégés par les permissions du système de fichiers, puis montés comme secrets Docker. Les secrets TOTP et demandes de groupe sont chiffrés au repos (AES-256-GCM).
 
 ## Tests
 

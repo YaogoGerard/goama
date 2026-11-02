@@ -78,7 +78,7 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
         prisma.session.updateMany({ where: { agentId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
       ]);
       await journaliser(req.agent!.id, "suspension", agent.matricule);
-      relais.fermerAgent(id, 4003);
+      await relais.fermerAgent(id, 4003);
       return { ok: true };
     },
   );
@@ -225,23 +225,39 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
     { preHandler: [app.requireAuth, app.requireAdmin] },
     async (req) => {
       const { page, limit, skip } = pagination(req);
-      const where = { statut: { not: "TERMINE" as const } };
+      const where = { createdAt: { gte: new Date(Date.now() - 90 * 86_400_000) } };
       const [items, total] = await Promise.all([
         prisma.retraitCryptographique.findMany({
           where,
           skip,
           take: limit,
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true, groupeId: true, agentId: true, statut: true, erreur: true, createdAt: true, updatedAt: true },
+          select: {
+            id: true, groupeId: true, agentId: true, epoch: true,
+            statut: true, erreur: true, membresAttendus: true, membresAccuses: true,
+            createdAt: true, updatedAt: true,
+          },
         }),
         prisma.retraitCryptographique.count({ where }),
       ]);
-      return { items, page, limit, total, totalPages: Math.ceil(total / limit) };
+      const avecProgression = await Promise.all(items.map(async (item) => {
+        const [recus, attendus] = await Promise.all([
+          prisma.groupKeyReceipt.count({ where: { groupeId: item.groupeId, epoch: item.epoch } }),
+          Promise.resolve(item.membresAttendus.length * Math.max(0, item.membresAttendus.length - 1)),
+        ]);
+        return {
+          id: item.id, groupeId: item.groupeId, agentId: item.agentId, epoch: item.epoch,
+          statut: item.statut, erreur: item.erreur,
+          membresAttendus: item.membresAttendus.length, membresAccuses: item.membresAccuses.length,
+          recus, attendus, createdAt: item.createdAt, updatedAt: item.updatedAt,
+        };
+      }));
+      return { items: avecProgression, page, limit, total, totalPages: Math.ceil(total / limit) };
     },
   );
 
   // ---- Présence : agents en ligne parmi MES groupes ---------------------
-  // En mémoire (une instance au sprint) ; JAMAIS stockée en base (doc 06 §8).
+  // Partagée entre les instances via les heartbeats WebSocket en PostgreSQL.
   app.get("/presence", { preHandler: [app.requireAuth] }, async (req) => {
     const mesGroupes = await prisma.groupMember.findMany({
       where: { agentId: req.agent!.id, removedAt: null },
@@ -258,6 +274,11 @@ export function enregistrerRoutesAgents(app: FastifyInstance) {
       select: { agentId: true },
     });
     const uniques = [...new Set(membres.map((m) => m.agentId))];
-    return { enLigne: uniques.filter((id) => relais.estEnLigne(id)) };
+    const seuil = new Date(Date.now() - 45_000);
+    const actifs = await prisma.agentPresence.findMany({
+      where: { agentId: { in: uniques }, lastSeenAt: { gt: seuil } },
+      select: { agentId: true },
+    });
+    return { enLigne: actifs.map((presence) => presence.agentId) };
   });
 }

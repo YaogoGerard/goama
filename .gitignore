@@ -2,6 +2,9 @@ node_modules/
 dist/
 data/
 .env
+secrets/
+backups/
+*.secret
 *.log
 src/generated/
 backend/src/generated/

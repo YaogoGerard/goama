@@ -15,7 +15,7 @@
 //     « matricule inconnu » de « mauvais code » (anti-énumération, épreuve Intrus) ;
 //   - une nouvelle connexion ferme les sessions précédentes (session unique).
 // =====================================================================
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../plugins/db.js";
 import { journaliser } from "../plugins/audit.js";
 import { codeActivationAleatoire, hasherSecret, verifierSecret, scryptFactice } from "../lib/crypto.js";
@@ -80,7 +80,7 @@ export async function reinitialiserAccesAgent(agentId: string, adminId: string) 
       create: { agentId, codeHash: createHash("sha256").update(codeClair).digest("hex"), expiresAt: dansUnNombreHeures(config.ACTIVATION_TTL_H) },
     }),
   ]);
-  relais.fermerAgent(agentId, 4003);
+  await relais.fermerAgent(agentId, 4003);
   await journaliser(adminId, "reinitialisation_acces", agent.matricule);
   return { agentId, codeActivation: codeClair };
 }
@@ -102,13 +102,23 @@ export async function activer(donnees: { matricule: string; code: string; secret
   }
 
   const totpSecret = genererSecretTotp();
-  await prisma.$transaction([
-    prisma.agent.update({
-      where: { id: agent.id },
+  const codeConsomme = await prisma.$transaction(async (tx) => {
+    // La condition usedAt IS NULL est évaluée par PostgreSQL sous verrou de
+    // ligne : deux activations concurrentes ne peuvent pas consommer le même code.
+    const consommation = await tx.codeActivation.updateMany({
+      where: { id: code.id, agentId: agent.id, codeHash: codeClairHache, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    });
+    if (consommation.count !== 1) return false;
+
+    const activation = await tx.agent.updateMany({
+      where: { id: agent.id, statut: "PRE_INSCRIT" },
       data: { statut: "ACTIF", secretHash: hasherSecret(donnees.secret), totpSecret: chiffrerSecretTotp(totpSecret) },
-    }),
-    prisma.codeActivation.update({ where: { id: code.id }, data: { usedAt: new Date() } }),
-  ]);
+    });
+    if (activation.count !== 1) throw new Error("activation_agent_state_changed");
+    return true;
+  });
+  if (!codeConsomme) throw new ErreurApi(400, "code_invalide");
   await journaliser(agent.id, "activation", agent.matricule);
   return { totpSecret, uri: uriTotp(totpSecret, agent.matricule) };
 }
@@ -157,12 +167,6 @@ export async function connecter(
       totpOk = false;
     }
   }
-  const demoTotpBypass =
-    config.DEMO_AUTH_BYPASS_TOTP &&
-    config.NODE_ENV !== "production" &&
-    agent.role === "ADMIN" &&
-    agent.matricule === config.DEMO_ADMIN_MATRICULE;
-
   // Échec d'authentification : mauvais statut, secret faux ou compte verrouillé
   if (agent.statut !== "ACTIF" || !secretOk || estVerrouille) {
     await journaliser(agent.id, "echec_authentification");
@@ -170,17 +174,24 @@ export async function connecter(
   }
 
   // Second facteur incorrect : incrémenter le compteur (REQ-ID-005)
-  if (!totpOk && !demoTotpBypass) {
-    const nouvelles = agent.tentativesConnexion + 1;
-    await prisma.agent.update({
-      where: { id: agent.id },
-      data: {
-        tentativesConnexion: nouvelles,
-        // Verrouillage déclenché dès MAX_TENTATIVES tentatives consécutives
-        verrouilleJusqua: nouvelles >= MAX_TENTATIVES ? new Date(maintenant + DUREE_VERROU_MS) : agent.verrouilleJusqua,
-      },
-    });
-
+  if (!totpOk) {
+    // Un UPDATE SQL atomique évite les pertes d'incrément lorsque plusieurs
+    // codes erronés arrivent simultanément. Les tentatives reçues pendant un
+    // verrou actif ne prolongent pas celui-ci.
+    const resultat = await prisma.$queryRaw<Array<{ tentativesConnexion: number }>>`
+      UPDATE "Agent"
+      SET "tentativesConnexion" = "tentativesConnexion" + 1,
+          "verrouilleJusqua" = CASE
+            WHEN "tentativesConnexion" + 1 >= ${MAX_TENTATIVES}
+              THEN NOW() + (${DUREE_VERROU_MS} * INTERVAL '1 millisecond')
+            ELSE "verrouilleJusqua"
+          END
+      WHERE id = ${agent.id}
+        AND statut = 'ACTIF'
+        AND ("verrouilleJusqua" IS NULL OR "verrouilleJusqua" <= NOW())
+      RETURNING "tentativesConnexion"
+    `;
+    const nouvelles = resultat[0]?.tentativesConnexion ?? MAX_TENTATIVES;
     await journaliser(agent.id, nouvelles >= MAX_TENTATIVES ? "compte_verrouille" : "echec_authentification");
     throw new ErreurApi(401, "identifiants_invalides");
   }
@@ -188,8 +199,39 @@ export async function connecter(
   // Succès : sérialiser les connexions concurrentes sur la ligne Agent.
   // Sans verrou, deux logins simultanés pourraient chacun créer une session
   // active et violer la politique mono-appareil.
-  const session = await prisma.$transaction(async (tx) => {
+  const resultatConnexion = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
+    const courant = await tx.agent.findUnique({ where: { id: agent.id } });
+    if (!courant || courant.statut !== "ACTIF" || !courant.secretHash ||
+        !verifierSecret(donnees.secret, courant.secretHash) ||
+        (courant.verrouilleJusqua && courant.verrouilleJusqua.getTime() > Date.now())) {
+      return { ok: false as const, verrouille: true };
+    }
+
+    let secondFacteurValide = false;
+    if (courant.totpSecret) {
+      try {
+        secondFacteurValide = verifierCodeTotp(
+          dechiffrerSecretTotp(courant.totpSecret), courant.matricule, donnees.codeTotp,
+        );
+      } catch {
+        secondFacteurValide = false;
+      }
+    }
+    if (!secondFacteurValide) {
+      const nouvelles = courant.tentativesConnexion + 1;
+      await tx.agent.update({
+        where: { id: courant.id },
+        data: {
+          tentativesConnexion: { increment: 1 },
+          verrouilleJusqua: nouvelles >= MAX_TENTATIVES
+            ? new Date(Date.now() + DUREE_VERROU_MS)
+            : courant.verrouilleJusqua,
+        },
+      });
+      return { ok: false as const, verrouille: nouvelles >= MAX_TENTATIVES };
+    }
+
     await tx.agent.update({
       where: { id: agent.id },
       data: {
@@ -197,8 +239,8 @@ export async function connecter(
         verrouilleJusqua: null,
         // Migration transparente des secrets historiques en clair après preuve
         // de possession du second facteur.
-        ...(agent.totpSecret && !estSecretTotpChiffre(agent.totpSecret)
-          ? { totpSecret: chiffrerSecretTotp(agent.totpSecret) }
+        ...(courant.totpSecret && !estSecretTotpChiffre(courant.totpSecret)
+          ? { totpSecret: chiffrerSecretTotp(dechiffrerSecretTotp(courant.totpSecret)) }
           : {}),
       },
     });
@@ -206,17 +248,59 @@ export async function connecter(
       where: { agentId: agent.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    return tx.session.create({
-      data: { agentId: agent.id, expiresAt: dansUnNombreHeures(12) },
+    const refreshToken = randomBytes(32).toString("base64url");
+    const session = await tx.session.create({
+      data: {
+        agentId: agent.id,
+        expiresAt: dansUnNombreHeures(12),
+        refreshTokenHash: createHash("sha256").update(refreshToken).digest("hex"),
+      },
     });
+    return { ok: true as const, session, refreshToken };
   });
+  if (!resultatConnexion.ok) {
+    await journaliser(agent.id, resultatConnexion.verrouille ? "compte_verrouille" : "echec_authentification");
+    throw new ErreurApi(401, "identifiants_invalides");
+  }
+  const session = resultatConnexion.session;
   // Fermer sans délai la socket de l'ancienne session avant de rendre le jeton.
-  relais.fermerAgent(agent.id, 4001);
+  await relais.fermerAgent(agent.id, 4001, undefined, session.id);
   // Le JWT porte jti = id de session : la garde interroge CETTE session en
   // base, donc une révocation est effective IMMÉDIATEMENT (épreuve du jury).
-  const jeton = signer({ sub: agent.id, jti: session.id, role: agent.role as RoleApp });
+  const jeton = signer({ sub: agent.id, jti: session.id, role: agent.role as RoleApp, tokenType: "access" });
   await journaliser(agent.id, "connexion");
-  return { jeton, sessionId: session.id };
+  return { jeton, sessionId: session.id, refreshToken: resultatConnexion.refreshToken };
+}
+
+/** Rotation d'un jeton opaque stocké uniquement sous forme de hash. */
+export async function renouvelerSession(refreshToken: string) {
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(refreshToken)) throw new ErreurApi(401, "session_fermee");
+  const ancienHash = createHash("sha256").update(refreshToken).digest("hex");
+  const nouvelleValeur = randomBytes(32).toString("base64url");
+  const nouveauHash = createHash("sha256").update(nouvelleValeur).digest("hex");
+
+  const resultat = await prisma.$transaction(async (tx) => {
+    const sessionInitiale = await tx.session.findUnique({ where: { refreshTokenHash: ancienHash }, select: { id: true } });
+    if (!sessionInitiale) return null;
+    await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${sessionInitiale.id} FOR UPDATE`;
+    const session = await tx.session.findUnique({
+      where: { id: sessionInitiale.id },
+      include: { agent: { select: { id: true, role: true, statut: true } } },
+    });
+    if (!session || session.refreshTokenHash !== ancienHash || session.revokedAt ||
+        session.expiresAt.getTime() <= Date.now() || session.agent.statut !== "ACTIF") return null;
+
+    await tx.session.update({ where: { id: session.id }, data: { refreshTokenHash: nouveauHash } });
+    return { agent: session.agent, sessionId: session.id };
+  });
+  if (!resultat) throw new ErreurApi(401, "session_fermee");
+  return {
+    sub: resultat.agent.id,
+    jti: resultat.sessionId,
+    role: resultat.agent.role as RoleApp,
+    tokenType: "access" as const,
+    refreshToken: nouvelleValeur,
+  };
 }
 
 // 4) Déconnexion volontaire : révoque la session courante
@@ -224,7 +308,7 @@ export async function deconnecter(sessionId: string) {
   const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { agentId: true } });
   await prisma.session.updateMany({
     where: { id: sessionId, revokedAt: null },
-    data: { revokedAt: new Date() },
+    data: { revokedAt: new Date(), refreshTokenHash: null },
   });
-  if (session) relais.fermerAgent(session.agentId, 4001);
+  if (session) await relais.fermerSession(session.agentId, sessionId, 4001);
 }
