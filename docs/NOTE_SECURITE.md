@@ -7,10 +7,11 @@ Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm,
 ## Règles de déploiement
 
 - Utiliser HTTPS/WSS derrière un reverse proxy durci ; configurer une liste explicite d'origines HTTPS.
-- Fournir un `JWT_SECRET` aléatoire d'au moins 32 caractères et une `TOTP_ENCRYPTION_KEY` dédiée de 32 octets hexadécimaux, distincte du secret JWT.
+- Fournir un `JWT_SECRET` aléatoire d'au moins 64 caractères et une `TOTP_ENCRYPTION_KEY` dédiée de 32 octets hexadécimaux, distincte du secret JWT.
 - Protéger et sauvegarder `TOTP_ENCRYPTION_KEY` hors de la base et du dépôt. Sa perte rend les secrets TOTP chiffrés irrécupérables.
 - En production, injecter `ADMIN_TOTP_SECRET` par un gestionnaire de secrets ; le secret ne doit pas être écrit dans les logs.
 - Garder PostgreSQL sur un réseau privé, sauvegarder les données et contrôler l'accès aux journaux.
+- En déploiement multi-instance, conserver PostgreSQL comme source partagée pour la présence, les accusés de rotation cryptographique et les compteurs de limitation ; vérifier `/readyz` avant d'ajouter une instance.
 - Ne jamais envoyer une clé Megolm brute au backend.
 - Ne pas considérer la révocation serveur comme une rotation cryptographique terminée.
 - N'utiliser que des comptes et contenus fictifs tant que le flux Olm/Megolm n'a pas été testé entre navigateurs, que les identités n'ont pas été vérifiées hors bande et qu'une revue indépendante n'a pas été effectuée.

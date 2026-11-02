@@ -209,7 +209,7 @@ export function enregistrerRoutesDevices(app: FastifyInstance) {
     await journaliser(req.agent!.id, "revocation_appareil", id);
     // La session HTTP n'est pas le seul canal actif : couper aussi les sockets
     // ouvertes. La politique actuelle limite à un appareil actif par agent.
-    relais.fermerAgent(device.agentId, 4003);
+    await relais.fermerAgent(device.agentId, 4003);
     return { ok: true };
   });
 }

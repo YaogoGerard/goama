@@ -1,7 +1,8 @@
 // =====================================================================
 // Configuration : TOUT vient de l'environnement (12-factor, REQ-OPS-002).
 // Zod valide les variables et fournit des défauts raisonnables pour le
-// sprint. En production, JWT_SECRET doit être fourni via Docker secrets.
+// développement. En production, les secrets sont injectés par l'entrypoint
+// depuis Docker Secrets (jamais générés ou remplacés silencieusement).
 // =====================================================================
 import { z } from "zod";
 
@@ -20,18 +21,22 @@ const SchemaEnv = z.object({
   JWT_SECRET: z.string().default("secret-de-dev-changez-moi"),
   // Clé indépendante de 32 octets (hex) pour chiffrer les secrets TOTP au repos.
   TOTP_ENCRYPTION_KEY: z.string().default("").refine((value) => value === "" || /^[a-fA-F0-9]{64}$/.test(value), "TOTP_ENCRYPTION_KEY doit être vide en développement ou contenir 64 caractères hexadécimaux."),
+  GROUP_REQUEST_ENCRYPTION_KEY: z.string().default("").refine((value) => value === "" || /^[a-fA-F0-9]{64}$/.test(value), "GROUP_REQUEST_ENCRYPTION_KEY doit contenir 64 caractères hexadécimaux."),
   FILES_DIR: z.string().default("./data/files"),
   // Limitation de débit (doc 06 §7) : globale par IP, stricte sur /auth/connexion
   GLOBAL_RATE_MAX: z.coerce.number().default(300),
   LOGIN_RATE_MAX: z.coerce.number().default(5),
+  // Adresses exactes des reverse proxies autorisés à fournir X-Forwarded-For.
+  // La valeur est vide par défaut : aucune en-tête proxy n'est alors approuvée.
+  TRUST_PROXY: z.string().default(""),
   ACTIVATION_TTL_H: z.coerce.number().default(24),
   // Délai laissé à une socket WebSocket pour s'authentifier (premier message)
   WS_AUTH_TIMEOUT_MS: z.coerce.number().default(5000),
   // "true" = reflète l'origine (développement) ; sinon une origine exacte
   CORS_ORIGIN: z.string().default("true"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DEMO_AUTH_BYPASS_TOTP: z.coerce.boolean().default(false),
-  DEMO_ADMIN_MATRICULE: z.string().default("ADMIN001"),
+  MEDIA_MAX_BYTES_PER_GROUP: z.coerce.number().int().positive().default(1_073_741_824),
+  MEDIA_MAX_BYTES_PER_AGENT: z.coerce.number().int().positive().default(268_435_456),
   PUBLIC_WEB_URL: z.string().default("http://localhost:3000"),
   PUBLIC_ADMIN_URL: z.string().default("http://localhost:5173"),
   PUBLIC_API_URL: z.string().default("http://localhost:8080"),
@@ -39,16 +44,24 @@ const SchemaEnv = z.object({
 
 export const config = SchemaEnv.parse(process.env);
 
-if (config.NODE_ENV === "production" && config.DEMO_AUTH_BYPASS_TOTP) {
-  throw new Error("DEMO_AUTH_BYPASS_TOTP est interdit en production.");
-}
-
 if (config.NODE_ENV === "production") {
-  if (config.JWT_SECRET === "secret-de-dev-changez-moi" || config.JWT_SECRET.length < 32) {
-    throw new Error("JWT_SECRET doit contenir au moins 32 caractères uniques en production.");
+  if (config.JWT_SECRET === "secret-de-dev-changez-moi" || config.JWT_SECRET.length < 64) {
+    throw new Error("JWT_SECRET doit contenir au moins 64 caractères aléatoires en production.");
+  }
+  if (!config.TRUST_PROXY.trim()) {
+    throw new Error("TRUST_PROXY doit désigner explicitement les IP/CIDR des reverse proxies de confiance en production.");
+  }
+  if (config.DATABASE_URL.includes("goama:goama@") || !process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL doit être fourni explicitement en production.");
   }
   if (!/^[a-fA-F0-9]{64}$/.test(config.TOTP_ENCRYPTION_KEY)) {
     throw new Error("TOTP_ENCRYPTION_KEY doit être une clé hexadécimale dédiée de 32 octets en production.");
+  }
+  if (!/^[a-fA-F0-9]{64}$/.test(config.GROUP_REQUEST_ENCRYPTION_KEY)) {
+    throw new Error("GROUP_REQUEST_ENCRYPTION_KEY doit être une clé AES-256 dédiée de 32 octets en production.");
+  }
+  if (config.MEDIA_MAX_BYTES_PER_AGENT > config.MEDIA_MAX_BYTES_PER_GROUP) {
+    throw new Error("MEDIA_MAX_BYTES_PER_AGENT ne peut pas dépasser MEDIA_MAX_BYTES_PER_GROUP.");
   }
   // Exception standard : les boucles locales restent admises en HTTP pour
   // une installation de démonstration sur la machine de l'exploitant.

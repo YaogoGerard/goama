@@ -43,49 +43,46 @@ Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly 
 - **Données :** PostgreSQL 17 ; stockage d'enveloppes opaques (aucun clair en base).
 - **Déploiement :** Docker Compose, Nginx en terminaison statique et proxy `/api`.
 
-## Installation en une commande
+## Déploiement
 
-Prérequis : Docker Engine avec Docker Compose v2. Aucun autre outil ni fichier de configuration n'est nécessaire.
+Goama ne crée **aucun compte de démonstration** et ne génère aucun secret de production au démarrage. Le déploiement nécessite Docker Engine + Compose v2, un domaine HTTPS, une liste explicite des reverse proxies de confiance, et des fichiers de secrets préparés hors du dépôt. La procédure complète et le modèle de configuration sont décrits dans [`docs/DEPLOIEMENT_SECURITE.md`](docs/DEPLOIEMENT_SECURITE.md).
 
 ```bash
 git clone https://github.com/YaogoGerard/goama.git
 cd goama
-docker compose up
+# Préparer les fichiers secrets et .env selon docs/DEPLOIEMENT_SECURITE.md
+docker compose --env-file .env config -q
+docker compose --env-file .env up --build -d
 ```
 
-Au premier lancement, `docker compose up` :
+Le premier démarrage applique les migrations et provisionne un unique administrateur à partir d'un matricule et de secrets explicitement fournis. Les identifiants et secrets ne sont jamais écrits dans les journaux. Les ports sont liés à la boucle locale par défaut ; placez un reverse proxy TLS correctement configuré devant la stack.
 
-1. construit toutes les images **en mode production** (builds minifiés, `NODE_ENV=production`) ;
-2. applique les migrations PostgreSQL ;
-3. provisionne automatiquement **1 administrateur et 3 agents de démonstration** — deux habilités au parrainage de groupes (Chef de Service, Directeur Central), un non habilité (Chargé d'Études) — et affiche leurs mot de passe et secret TOTP dans les journaux : `docker compose logs api`. Identifiants détaillés dans `backend/DEMO_ACCOUNTS.md`.
-
-Les fichiers `.env` ne sont pas requis : les secrets applicatifs (JWT, clé de chiffrement TOTP) sont générés au premier démarrage de l'API et persistés dans un volume Docker. Les donnés de démonstration sont strictement fictives ; les ports applicatifs sont liés en `127.0.0.1` par défaut et PostgreSQL n'est pas publié sur l'hôte. Ports et URL publiques restent surchargeables via un `.env` optionnel.
-
-| Service | URL |
+| Service (à adapter au domaine configuré) | URL locale par défaut |
 |---|---|
 | Messagerie agent | http://localhost:3000 |
 | Administration | http://localhost:5173 |
 | API | http://localhost:8080 (`/healthz`) |
 
-Arrêt de la stack : `docker compose down` (données conservées ; un nouvel `docker compose up` relance tout sans perte). Réinitialisation complète : `docker compose down -v` puis `docker compose up`.
+Arrêt de la stack : `docker compose --env-file .env down` (données conservées). Ne supprimez pas les volumes PostgreSQL ou médias pour une mise à jour ordinaire.
 
 ## Vérification
 
 ```bash
-cd backend && npm ci && npm run typecheck && npm test
+cd backend && npm ci && npm run typecheck && npm run test:isolated
 cd ../admin && npm ci && npm run build && npm run test:e2e
 cd ../web && npm ci && npm run build && npm run test:e2e
 ```
 
-- Tests backend : contrôle d'accès (JWT, 2FA, verrouillage, révocation immédiate, session unique, parrainage), stockage opaque de contenus, enveloppes Megolm/Olm, signatures Ed25519, chiffrement au repos du TOTP.
+- Tests backend : contrôle d'accès (JWT court, renouvellement cookie HttpOnly, 2FA, verrouillage, révocation immédiate, session unique, parrainage), stockage opaque, enveloppes Megolm/Olm, signatures Ed25519, chiffrement au repos.
 - Tests admin : parcours d'interface (vitest/happy-dom) et tests de fumée Playwright contre la stack Docker (`npm run test:smoke`).
 - Tests web : parcours d'interface, publication de clés Olm et absence de texte en clair (Playwright).
+- CI : le workflow `Validation Goama` relance automatiquement ces vérifications sur chaque push et chaque pull request.
 
 ## Sécurité
 
 - Agent enrôlé uniquement, authentification à deux facteurs (secret + TOTP), verrouillage après échecs, session unique par agent ; révocation immédiate : sessions, WebSockets (code 4003), pré-clés et génération de groupe invalidés en une opération auditée.
 - Secrets TOTP chiffrés au repos (AES-256-GCM, clé dédiée et séparée du secret JWT) ; jamais de clé Megolm brute ni de clé privée côté serveur.
-- Limites connues : identités épinglées en TOFU (vérification institutionnelle hors bande à construire), forward secrecy de Megolm partielle (d'où rotation à 100 messages / 7 jours et après tout changement de membres). Pour la liste complète et les règles de déploiement : `docs/NOTE_SECURITE.md`.
+- Limites connues : identités épinglées en TOFU (vérification institutionnelle hors bande encore requise) et protocole crypto non audité indépendamment. Les événements WebSocket, la présence et les compteurs de débit sont maintenant partagés via PostgreSQL entre instances, mais doivent encore passer des tests d'intégration sous charge et en cas de partition réseau. Les reçus applicatifs de distribution Megolm suivent chaque destinataire et chaque epoch, mais ne constituent pas à eux seuls une preuve cryptographique indépendante. Sauvegarde/restauration et revue cryptographique restent des prérequis avant toute donnée administrative réelle. Pour les règles de déploiement : `docs/NOTE_SECURITE.md` et `docs/DEPLOIEMENT_SECURITE.md`.
 
 ## Documentation
 

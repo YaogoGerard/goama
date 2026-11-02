@@ -16,6 +16,7 @@ import rateLimit from "@fastify/rate-limit";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
+import { PostgresRateLimitStore } from "./plugins/rate-limit-store.js";
 
 import { config } from "./config.js";
 import { prisma } from "./plugins/db.js";
@@ -42,6 +43,9 @@ function fabriquerRequireAuth(app: FastifyInstance): Garde {
     let payload: PayloadJeton;
     try {
       payload = await req.jwtVerify(); // étapes 1
+      if (payload.tokenType !== "access") {
+        return reply.code(401).send({ erreur: "jeton_absent_ou_invalide" });
+      }
     } catch {
       return reply.code(401).send({ erreur: "jeton_absent_ou_invalide" });
     }
@@ -79,16 +83,34 @@ export async function construireApp(): Promise<FastifyInstance> {
     // (doc 06 §8 : "Jamais en cache : contenu des messages, secrets").
     logger: { level: "warn" },
     bodyLimit: 27 * 1024 * 1024, // laisse passer un multipart de 25 Mo
+    // Seuls les sauts explicitement autorisés peuvent définir l'adresse IP
+    // client via X-Forwarded-For. Ne jamais utiliser `true` en production.
+    trustProxy: config.TRUST_PROXY.trim()
+      ? config.TRUST_PROXY.split(",").map((entry) => entry.trim()).filter(Boolean)
+      : false,
+  });
+
+  app.addHook("onSend", async (_req, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    reply.header("Cross-Origin-Resource-Policy", "same-site");
+    if (config.NODE_ENV === "production") {
+      reply.header("Strict-Transport-Security", "max-age=31536000");
+    }
   });
 
   await app.register(cors, {
     origin: config.CORS_ORIGIN === "true" ? true : config.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean),
+    credentials: true,
   });
 
   await app.register(rateLimit, {
     global: true,
     max: config.GLOBAL_RATE_MAX,
     timeWindow: "1 minute",
+    store: PostgresRateLimitStore,
     // REQ-ABUSE-004 (P0) : 429 avec Retry-After, sans détail interne.
     // addHeadersOnExceeding expose Retry-After même avant le dépassement ;
     // addHeaders l'expose lors du refus → les deux sont nécessaires.

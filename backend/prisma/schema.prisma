@@ -113,17 +113,36 @@ model EnrollmentAuthorization {
 }
 
 model RetraitCryptographique {
-  id        String        @id @default(uuid())
-  groupeId  String
-  agentId   String
-  statut    RetraitStatut @default(EN_ATTENTE)
-  erreur    String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  agent     Agent         @relation(fields: [agentId], references: [id])
+  id                String        @id @default(uuid())
+  groupeId          String
+  agentId           String
+  epoch             Int           @default(0)
+  membresAttendus   String[]      @default([])
+  membresAccuses    String[]      @default([])
+  statut            RetraitStatut @default(EN_ATTENTE)
+  erreur            String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  agent             Agent         @relation(fields: [agentId], references: [id])
 
-  @@unique([groupeId, agentId])
+  @@unique([groupeId, epoch, agentId])
   @@index([statut])
+  @@index([groupeId, epoch])
+}
+
+// Preuve serveur qu'un membre a effectivement importé la nouvelle clé
+// Megolm publiée par un autre membre pour une génération donnée.
+model GroupKeyReceipt {
+  id          String   @id @default(uuid())
+  groupeId    String
+  epoch       Int
+  senderId    String
+  recipientId String
+  receivedAt  DateTime @default(now())
+
+  @@unique([groupeId, epoch, senderId, recipientId])
+  @@index([groupeId, epoch])
+  @@index([recipientId, receivedAt])
 }
 
 // Code d'activation à usage unique, valable 24 h (ADR-15, REQ-ID-002).
@@ -147,8 +166,30 @@ model Session {
   createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime? // toute nouvelle connexion révoque les sessions précédentes
+  refreshTokenHash String? @unique // seul le hash du jeton de renouvellement HttpOnly est conservé
 
   @@index([agentId])
+}
+
+// Présence partagée entre les instances de l'API. L'horodatage est rafraîchi
+// par la socket propriétaire et les lignes expirées sont ignorées/nettoyées.
+model AgentPresence {
+  agentId    String   @id
+  instanceId String
+  sessionId  String
+  lastSeenAt DateTime @default(now())
+
+  @@index([lastSeenAt])
+  @@index([instanceId])
+}
+
+// Compteurs de débit atomiques et partagés entre tous les workers API.
+model RateLimitBucket {
+  key       String   @id
+  current   Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 // --- Groupes et messages ---------------------------------------------

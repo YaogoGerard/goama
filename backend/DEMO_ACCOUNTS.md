@@ -1,30 +1,9 @@
-# Comptes de démonstration — Goama
+# Provisionnement des comptes Goama
 
-Provisionnés automatiquement au premier `docker compose up` par l'amorçage de l'API (`backend/src/bootstrap-accounts.ts`) puis affichés dans les journaux (`docker compose logs api`). Comptes **strictement fictifs**, réservés à l'installation locale de démonstration. Idempotent : un compte existant n'est jamais modifié, les identifiants restent stables aux redémarrages.
+Les anciens comptes de démonstration ont été supprimés du mécanisme d'amorçage. Aucun identifiant, mot de passe ou secret TOTP fictif n'est fourni ou généré par le projet.
 
-| Matricule | Rôle | Poste (habilitation parrainage) | Mot de passe |
-|---|---|---|---|
-| `ADMIN001` | Administrateur | Administrateur Système | `GoamaAdmin2026!` |
-| `AG001` | Agent | Chef de Service — **habilité** | `GoamaDemo2026!` |
-| `AG002` | Agent | Directeur Central — **habilité** | `GoamaDemo2026!` |
-| `AG003` | Agent | Chargé d'Études — non habilité | `GoamaDemo2026!` |
+En production, un seul administrateur initial est provisionné au premier démarrage lorsque `ADMIN_MATRICULE` et les secrets `ADMIN_PASSWORD` et `ADMIN_TOTP_SECRET` sont explicitement fournis. Ils sont montés via Docker Secrets et ne sont jamais affichés dans les journaux. Les agents ordinaires sont ensuite pré-inscrits individuellement via l'administration et activent leur propre TOTP.
 
-Secrets TOTP (à enregistrer dans une application d'authentification) :
+**Les anciennes valeurs de démonstration présentes dans l'historique Git ne doivent jamais être utilisées.** Si elles ont été copiées dans un environnement accessible, considérez-les comme compromises et supprimez les comptes correspondants.
 
-| Matricule | Secret TOTP (Base32) |
-|---|---|
-| `ADMIN001` | `JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP` |
-| `AG001` | `KRSXG5DSM5UQ4LLNKRSXG5DSM5UQ4LLN` |
-| `AG002` | `MFRGGZDFMZTWQ2LKMFRGGZDFMZTWQ2LK` |
-| `AG003` | `NBSWY3DPFQQFO33SNBSWY3DPFQQFO33S` |
-
-## Provisionnement d'une installation réelle
-
-Pour provisionner un administrateur avec des identifiants choisis, fournir les variables `ADMIN_MATRICULE`, `ADMIN_PASSWORD` (et `ADMIN_TOTP_SECRET` pour éviter l'affichage du TOTP généré) avant le démarrage. Les agents de démonstration peuvent être retirés en pré-inscrivant les agents réels via la console d'administration puis en réinitialisant le volume de données (`docker compose down -v`).
-
-## Réinitialisation
-
-```bash
-docker compose down -v   # efface données, fichiers et secrets générés
-docker compose up        # nouvelle stack, amorçage complet
-```
+Voir [`../docs/DEPLOIEMENT_SECURITE.md`](../docs/DEPLOIEMENT_SECURITE.md) pour la procédure de création et de protection des secrets.
