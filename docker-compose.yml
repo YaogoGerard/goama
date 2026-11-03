@@ -2,9 +2,11 @@
 #   docker compose up --build
 # Au premier démarrage, les secrets applicatifs sont générés dans un volume
 # partagé (stables aux redémarrages) et une copie lisible est écrite dans le
-# fichier .env à la racine du dépôt (non versionné, autorisations 600),
-# y compris les identifiants des comptes de démonstration. Aucun secret
-# n'apparaît dans les journaux.
+# fichier .env à la racine du dépôt (non versionné, autorisations 600).
+# Le service setup affiche en fin de démarrage les identifiants des comptes
+# de démonstration (il refuse toute configuration autre que localhost) et les
+# conserve dans .identifiants-demo ; l'API et les journaux d'audit n'en
+# contiennent aucun.
 # Pour une installation sur un domaine HTTPS public, préparer le .env avec
 # ses propres secrets (voir docs/DEPLOIEMENT_SECURITE.md).
 

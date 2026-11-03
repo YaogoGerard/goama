@@ -13,7 +13,7 @@
 
 ### Démonstration locale
 
-Pour essayer Goama sur la même machine, lance `docker compose up --build -d` : aucun `.env` ni dossier de secrets n'est requis au départ, le premier démarrage génère les secrets et écrit le fichier `.env` non versionné (autorisations 600) avec les identifiants des comptes fictifs. Compose démarre l'API et les interfaces, puis son service `setup` crée un administrateur et deux agents fictifs : un poste habilité au parrainage (« Chef de Service ») et un poste non habilité (« Rédacteur »). Aucun identifiant n'apparaît dans les journaux ; lis le `.env` pour les retrouver. Ne réutilise pas ces comptes ou secrets ailleurs. Les agents créent leurs clés d'appareil lors de leur première connexion.
+Pour essayer Goama sur la même machine, lance `docker compose up --build -d` : aucun `.env` ni dossier de secrets n'est requis au départ, le premier démarrage génère les secrets et écrit le fichier `.env` non versionné (autorisations 600) avec les identifiants des comptes fictifs. Compose démarre l'API et les interfaces, puis son service `setup` crée un administrateur et deux agents fictifs : un poste habilité au parrainage (« Chef de Service ») et un poste non habilité (« Rédacteur »). À la fin du démarrage, le service `setup` affiche ces comptes avec leur mot de passe et leur secret TOTP (également conservés dans `.identifiants-demo`, non versionné, autorisations 600) ; ces identifiants de démonstration n'apparaissent jamais dans les journaux de l'API ni dans les journaux d'audit. Ne réutilise pas ces comptes ou secrets ailleurs. Les agents créent leurs clés d'appareil lors de leur première connexion.
 
 Pour arrêter sans supprimer les données, utilise `docker compose down`.
 

@@ -1,6 +1,8 @@
 # Provisionnement des comptes Goama
 
-Les anciens comptes de démonstration ont été supprimés du mécanisme d'amorçage. Aucun identifiant, mot de passe ou secret TOTP fictif n'est fourni ou généré par le projet.
+Les anciens comptes de démonstration ont été supprimés du mécanisme d'amorçage. Aucun identifiant, mot de passe ou secret TOTP fictif n'est fourni ou généré par le projet en production.
+
+Seule la démonstration locale lancée par `docker compose up` crée deux agents fictifs (service `setup`, restreint à `localhost`) et affiche leurs identifiants en fin de démarrage, ainsi que ceux de l'administrateur local. Ces valeurs sont également écrites dans `.identifiants-demo` (non versionné, 600) ; elles ne sont jamais journalisées par l'API.
 
 En production, un seul administrateur initial est provisionné au premier démarrage lorsque `ADMIN_MATRICULE` et les secrets `ADMIN_PASSWORD` et `ADMIN_TOTP_SECRET` sont explicitement fournis. Ils sont montés via Docker Secrets et ne sont jamais affichés dans les journaux. Les agents ordinaires sont ensuite pré-inscrits individuellement via l'administration et activent leur propre TOTP.
 

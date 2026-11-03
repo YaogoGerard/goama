@@ -48,18 +48,22 @@ Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly 
 Depuis la racine du dépôt, avec Docker Engine et Docker Compose installés :
 
 ```bash
-docker compose up --build -d
+docker compose up --build
 ```
 
-Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au premier démarrage, les secrets applicatifs sont générés puis le service d'initialisation écrit le fichier `.env` à la racine du dépôt (non versionné, autorisations 600). Il contient les secrets, les identifiants des comptes de démonstration, la configuration locale par défaut ; il est conservé tel quel aux démarrages suivants. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »).
+Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au premier démarrage, les secrets applicatifs sont générés puis le service d'initialisation écrit le fichier `.env` à la racine du dépôt (non versionné, autorisations 600). Il contient les secrets et la configuration locale par défaut ; il est conservé tel quel aux démarrages suivants. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »).
 
-Les identifiants de connexion ne sont jamais affichés dans les journaux ; ils sont dans le fichier `.env` :
+À la fin du démarrage, le service `setup` affiche un récapitulatif prêt à l'emploi : adresses des interfaces, puis pour l'administrateur et chacun des deux agents, le matricule, le mot de passe, le secret TOTP et le lien `otpauth` à ouvrir dans une application d'authentification. Les mêmes valeurs sont écrites dans le fichier `.identifiants-demo` à la racine du dépôt (non versionné, autorisations 600) et réaffichées à chaque démarrage.
+
+Avec `docker compose up --build` (au premier plan), le récapitulatif apparaît directement dans la sortie ; en arrière-plan (`-d`), il se relit avec :
 
 ```bash
-grep -E '^DEMO_|^ADMIN_' .env
+docker compose logs setup
 ```
 
-Ouvre ensuite :
+Ces identifiants n'existent que pour la démonstration locale : le script de démonstration refuse toute configuration autre que `localhost`, et l'API n'écrit jamais de secret dans ses journaux.
+
+Les interfaces sont ensuite accessibles ici (adresses rappelées dans le récapitulatif) :
 
 - Messagerie : http://localhost:3000
 - Administration : http://localhost:5173

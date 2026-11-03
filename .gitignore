@@ -2,6 +2,7 @@ node_modules/
 dist/
 data/
 .env
+.identifiants-demo
 secrets/
 backups/
 *.secret
