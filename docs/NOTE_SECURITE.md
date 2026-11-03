@@ -2,7 +2,7 @@
 
 **Statut : logiciel en développement, non certifié pour un déploiement institutionnel.** Les contrôles d'identité et d'autorisation côté serveur sont présents et renforcés (sessions uniques vérifiées à chaque requête, TOTP chiffré au repos, WebSockets contrôlant l'origine et la charge). Le modèle est strictement mono-appareil : un appareil actif par agent.
 
-Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm, enveloppes individuelles, import des clés Megolm et accusés par epoch) est implémenté côté client et backend. Il a été validé en local entre trois contextes Chromium indépendants, avec messages et fichiers. Le modèle de confiance TOFU ne remplace pas une vérification hors bande des empreintes, qui reste à construire. En conséquence, Goama ne doit pas être utilisée avec des données administratives réelles tant que les tests adversariaux, la restauration complète et la revue indépendante n'ont pas été effectués.
+Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm, enveloppes individuelles, import des clés Megolm et accusés par epoch) est implémenté côté client et backend. Il a été validé en local entre trois contextes Chromium indépendants, avec messages et fichiers, et une démonstration automatisée entre les deux comptes de démonstration confirme le déchiffrement en temps réel côté destinataire pour un trafic terminal exclusivement chiffré. Le modèle de confiance TOFU ne remplace pas une vérification hors bande des empreintes, qui reste à construire. En conséquence, Goama ne doit pas être utilisée avec des données administratives réelles tant que les tests adversariaux, la restauration complète et la revue indépendante n'ont pas été effectués.
 
 ## Règles de déploiement
 
@@ -14,6 +14,6 @@ Le flux de distribution Olm/Megolm (publication de clés signées, sessions Olm,
 - En déploiement multi-instance, conserver PostgreSQL comme source partagée pour la présence, les accusés de rotation cryptographique et les compteurs de limitation ; vérifier `/readyz` avant d'ajouter une instance.
 - Ne jamais envoyer une clé Megolm brute au backend.
 - Ne pas considérer la révocation serveur comme une rotation cryptographique terminée.
-- N'utiliser que des comptes et contenus fictifs tant que le flux Olm/Megolm n'a pas été testé entre navigateurs, que les identités n'ont pas été vérifiées hors bande et qu'une revue indépendante n'a pas été effectuée.
+- N'utiliser que des comptes et contenus fictifs tant que les identités n'ont pas été vérifiées hors bande et qu'une revue indépendante n'a pas été effectuée.
 
 Le détail du protocole et ses règles sont dans `13_protocole_olm_megolm.md`. Voir également `TECHNOLOGIES_LICENCES.md` pour les licences des composants cryptographiques.
