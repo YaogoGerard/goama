@@ -13,7 +13,7 @@
 
 ### Démonstration locale
 
-Pour essayer Goama sur la même machine, prépare `.env` et les fichiers de secrets une seule fois, puis lance `./setup.sh` ou `docker compose up`. Compose démarre l'API et les interfaces, puis son service `setup` crée un administrateur et deux agents fictifs : un poste habilité au parrainage (« Chef de Service ») et un poste non habilité (« Rédacteur »). Les secrets sont affichés dans les journaux du service `setup` ; `./setup.sh` les montre dans le terminal. Ne réutilise pas ces comptes ou secrets ailleurs. Les agents créent leurs clés d'appareil lors de leur première connexion.
+Pour essayer Goama sur la même machine, lance `docker compose up --build -d` : aucun `.env` ni dossier de secrets n'est requis, les secrets sont générés automatiquement dans un volume Docker. Compose démarre l'API et les interfaces, puis son service `setup` crée un administrateur et deux agents fictifs : un poste habilité au parrainage (« Chef de Service ») et un poste non habilité (« Rédacteur »). Les identifiants sont affichés dans les journaux du service `setup` (`docker compose logs setup`). Ne réutilise pas ces comptes ou secrets ailleurs. Les agents créent leurs clés d'appareil lors de leur première connexion.
 
 Pour arrêter sans supprimer les données, utilise `docker compose down`.
 

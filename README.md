@@ -48,10 +48,14 @@ Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly 
 Depuis la racine du dépôt, avec Docker Engine et Docker Compose installés :
 
 ```bash
-./setup.sh
+docker compose up --build -d
 ```
 
-Compose démarre les services, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »). Le service `setup` affiche les informations de connexion dans les journaux Compose. `./setup.sh` lance la même stack et affiche ces informations dans le terminal.
+Aucun fichier `.env`, aucun dossier de secrets et aucun script de préparation ne sont nécessaires : le service `init-secrets` génère les secrets dans un volume Docker au premier démarrage. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »). Les identités des comptes fictifs sont seules dans le code source (script de démonstration) ; les mots de passe et secrets TOTP sont générés à l'exécution. Les identifiants de connexion sont affichés dans les journaux du service `setup` :
+
+```bash
+docker compose logs setup
+```
 
 Ouvre ensuite :
 
