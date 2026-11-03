@@ -1,26 +1,39 @@
-# Goama — déploiement conteneurisé. Tous les secrets sont fournis par
-# fichiers Docker Secrets ; aucun secret ou compte fictif n'a de valeur par défaut.
+# Goama — déploiement conteneurisé, lancement en une commande :
+#   docker compose up --build
+# Au premier démarrage, le service init-secrets génère les secrets
+# applicatifs dans un volume partagé (stables aux redémarrages).
+# Pour une installation sur un domaine HTTPS public, surcharger les
+# variables via un fichier .env (voir docs/DEPLOIEMENT_SECURITE.md).
 
 services:
+  init-secrets:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["/app/scripts/init-secrets.sh"]
+    command: []
+    volumes:
+      - secrets-data:/run/goama-secrets
+    restart: "no"
+
   db:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-goama}
       POSTGRES_DB: ${POSTGRES_DB:-goama}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - secrets-data:/run/secrets:ro
+    depends_on:
+      init-secrets:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-goama} -d $${POSTGRES_DB:-goama}"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
-    networks:
-      goama-net:
-        ipv4_address: 172.30.0.13
 
   api:
     build:
@@ -30,27 +43,21 @@ services:
       NODE_ENV: production
       POSTGRES_USER: ${POSTGRES_USER:-goama}
       POSTGRES_DB: ${POSTGRES_DB:-goama}
+      TRUST_PROXY: ${TRUST_PROXY:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      ADMIN_MATRICULE: ${ADMIN_MATRICULE:-ADMIN001}
       FILES_DIR: /data/files
       PORT: 8080
-      TRUST_PROXY: ${TRUST_PROXY:?Définir TRUST_PROXY avec les IP/CIDR des reverse proxies}
-      CORS_ORIGIN: ${CORS_ORIGIN:?Définir les origines HTTPS autorisées}
-      ADMIN_MATRICULE: ${ADMIN_MATRICULE:?Définir le matricule de l'administrateur initial}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:?Définir PUBLIC_WEB_URL en HTTPS}
-      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:?Définir PUBLIC_ADMIN_URL en HTTPS}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:?Définir PUBLIC_API_URL en HTTPS}
       MEDIA_MAX_BYTES_PER_GROUP: ${MEDIA_MAX_BYTES_PER_GROUP:-1073741824}
       MEDIA_MAX_BYTES_PER_AGENT: ${MEDIA_MAX_BYTES_PER_AGENT:-268435456}
-    secrets:
-      - postgres_password
-      - jwt_secret
-      - totp_encryption_key
-      - group_request_encryption_key
-      - admin_password
-      - admin_totp_secret
-    ports:
-      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:5173}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5173}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     volumes:
       - filedata:/data/files
+      - secrets-data:/run/secrets:ro
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -60,25 +67,41 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    networks:
-      goama-net:
-        ipv4_address: 172.30.0.12
+
+  setup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/setup-local-demo.js"]
+    environment:
+      NODE_ENV: production
+      POSTGRES_USER: ${POSTGRES_USER:-goama}
+      POSTGRES_DB: ${POSTGRES_DB:-goama}
+      TRUST_PROXY: ${TRUST_PROXY:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      ADMIN_MATRICULE: ${ADMIN_MATRICULE:-ADMIN001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:5173}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5173}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+    volumes:
+      - secrets-data:/run/secrets:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: "no"
 
   admin:
     build:
       context: ./admin
       dockerfile: Dockerfile
       args:
-        VITE_WEB_URL: ${PUBLIC_WEB_URL:?Définir PUBLIC_WEB_URL en HTTPS}
+        VITE_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
     ports:
       - "${ADMIN_BIND:-127.0.0.1}:${ADMIN_PORT:-5173}:80"
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      goama-net:
-        ipv4_address: 172.30.0.11
 
   web:
     build:
@@ -90,31 +113,8 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      goama-net:
-        ipv4_address: 172.30.0.10
 
 volumes:
   pgdata:
   filedata:
-
-networks:
-  goama-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.30.0.0/24
-
-secrets:
-  postgres_password:
-    file: ${POSTGRES_PASSWORD_FILE:?Créer un fichier secret PostgreSQL et définir POSTGRES_PASSWORD_FILE}
-  jwt_secret:
-    file: ${JWT_SECRET_FILE:?Créer un fichier secret JWT et définir JWT_SECRET_FILE}
-  totp_encryption_key:
-    file: ${TOTP_ENCRYPTION_KEY_FILE:?Créer un fichier secret TOTP et définir TOTP_ENCRYPTION_KEY_FILE}
-  group_request_encryption_key:
-    file: ${GROUP_REQUEST_ENCRYPTION_KEY_FILE:?Créer un fichier secret GroupRequest et définir GROUP_REQUEST_ENCRYPTION_KEY_FILE}
-  admin_password:
-    file: ${ADMIN_PASSWORD_FILE:?Créer un fichier secret admin et définir ADMIN_PASSWORD_FILE}
-  admin_totp_secret:
-    file: ${ADMIN_TOTP_SECRET_FILE:?Créer un fichier secret TOTP admin et définir ADMIN_TOTP_SECRET_FILE}
+  secrets-data:

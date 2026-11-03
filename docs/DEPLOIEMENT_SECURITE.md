@@ -11,6 +11,14 @@
 
 ## 1. Prérequis et topologie
 
+### Démonstration locale
+
+Pour essayer Goama sur la même machine, prépare `.env` et les fichiers de secrets une seule fois, puis lance `./setup.sh` ou `docker compose up`. Compose démarre l'API et les interfaces, puis son service `setup` crée un administrateur et deux agents fictifs : un poste habilité au parrainage (« Chef de Service ») et un poste non habilité (« Rédacteur »). Les secrets sont affichés dans les journaux du service `setup` ; `./setup.sh` les montre dans le terminal. Ne réutilise pas ces comptes ou secrets ailleurs. Les agents créent leurs clés d'appareil lors de leur première connexion.
+
+Pour arrêter sans supprimer les données, utilise `docker compose down`.
+
+La suite de cette procédure décrit le paramétrage sécurisé d'une installation destinée à être administrée ; la démonstration locale n'autorise pas l'utilisation de données réelles.
+
 - Docker Engine et Docker Compose v2 à jour, avec prise en charge des secrets Compose file-backed.
 - Un domaine HTTPS et un reverse proxy TLS administré, configuré pour supprimer les `X-Forwarded-*` reçus du client puis définir lui-même les valeurs fiables.
 - PostgreSQL persistant, volume média persistant, sauvegardes hors hôte et supervision des services.

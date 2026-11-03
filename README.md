@@ -43,9 +43,35 @@ Le chiffrement de groupe repose sur **Olm + Megolm** (via libolm en WebAssembly 
 - **Données :** PostgreSQL 17 ; stockage d'enveloppes opaques (aucun clair en base).
 - **Déploiement :** Docker Compose, Nginx en terminaison statique et proxy `/api`.
 
+## Lancer en local pour essayer
+
+Depuis la racine du dépôt, avec Docker Engine et Docker Compose installés :
+
+```bash
+./setup.sh
+```
+
+Compose démarre les services, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »). Le service `setup` affiche les informations de connexion dans les journaux Compose. `./setup.sh` lance la même stack et affiche ces informations dans le terminal.
+
+Ouvre ensuite :
+
+- Messagerie : http://localhost:3000
+- Administration : http://localhost:5173
+- État de l'API : http://localhost:8080/healthz
+
+Ces comptes et secrets sont réservés à une démonstration locale. Ne les partage pas et ne les utilise pas avec de vraies données. Les agents sont actifs, mais leur appareil et leurs clés de chiffrement sont créés lors de leur première connexion dans le navigateur.
+
+Arrêter les services sans effacer les données :
+
+```bash
+docker compose down
+```
+
+Relancer ensuite avec `docker compose up -d`. Compose crée les comptes manquants au démarrage ; les comptes existants ne sont ni réinitialisés ni modifiés. Pour supprimer aussi les données locales, il faudrait supprimer les volumes Docker ; cette opération est destructive.
+
 ## Déploiement
 
-Goama ne crée **aucun compte de démonstration** et ne génère aucun secret de production au démarrage. Le déploiement nécessite Docker Engine + Compose v2, un domaine HTTPS, une liste explicite des reverse proxies de confiance, et des fichiers de secrets préparés hors du dépôt. La procédure complète et le modèle de configuration sont décrits dans [`docs/DEPLOIEMENT_SECURITE.md`](docs/DEPLOIEMENT_SECURITE.md).
+Hors démonstration locale, Goama ne crée aucun compte fictif et ne génère aucun secret de production au démarrage. Le déploiement nécessite Docker Engine + Compose v2, un domaine HTTPS, une liste explicite des reverse proxies de confiance et des fichiers de secrets préparés hors du dépôt. La procédure complète est décrite dans [`docs/DEPLOIEMENT_SECURITE.md`](docs/DEPLOIEMENT_SECURITE.md).
 
 ```bash
 git clone https://github.com/YaogoGerard/goama.git

@@ -21,9 +21,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
-COPY scripts/docker-entrypoint.sh ./scripts/
+COPY scripts/ ./scripts/
 COPY package.json ./
-RUN chmod 755 ./scripts/docker-entrypoint.sh
+RUN chmod 755 ./scripts/*.sh
 EXPOSE 8080
 ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
 CMD ["node", "dist/server.js"]

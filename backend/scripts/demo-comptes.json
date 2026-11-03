@@ -1,0 +1,20 @@
+{
+  "comptes": [
+    {
+      "matricule": "DEMO-AGENT-001",
+      "prenom": "Awa",
+      "nom": "Traore",
+      "ministere": "Ministère de démonstration",
+      "fonction": "Rédacteur",
+      "categorie": "A"
+    },
+    {
+      "matricule": "DEMO-PARRAIN-001",
+      "prenom": "Mariam",
+      "nom": "Kone",
+      "ministere": "Ministère de démonstration",
+      "fonction": "Chef de Service",
+      "categorie": "A"
+    }
+  ]
+}
