@@ -1,7 +1,11 @@
 // Création idempotente de comptes agents uniquement pour la démo locale.
 // Ce script refuse explicitement toute configuration autre que localhost.
+// Les identifiants (mot de passe et secret TOTP par compte) sont générés à
+// l'exécution et ne sont jamais journalisés : ils sont écrits dans le fichier
+// .env du dépôt (non versionné, autorisations 600), conservé par
+// l'opérateur aux démarrages suivants.
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { chmod, chown, readFile, writeFile } from "node:fs/promises";
 import { TOTP } from "otpauth";
 import { z } from "zod";
 import { prisma } from "./plugins/db.js";
@@ -11,6 +15,34 @@ import { chiffrerSecretTotp, genererSecretTotp } from "./lib/totp.js";
 const baseUrl = process.env.PUBLIC_WEB_URL;
 if (process.env.NODE_ENV !== "production" || !baseUrl || !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(baseUrl)) {
   throw new Error("Les comptes de démonstration sont autorisés uniquement sur une configuration localhost.");
+}
+
+const repertoireEnv = process.env.ENV_FILE_DIR;
+
+// Écrit la section démonstration du .env. Les clés existantes hors section
+// démonstration sont conservées telles quelles et dans l'ordre ; les clés
+// DEMO_* sont entièrement contrôlées par ce service (les comptes séquentiels
+// sont sa propriété : noms et valeurs régénérés uniquement à la création).
+async function ecrireIdentifiantsDansEnv(sectionDemo: Map<string, string>): Promise<void> {
+  if (!repertoireEnv || sectionDemo.size === 0) return;
+  const chemin = `${repertoireEnv}/.env`;
+  const base: string[] = [];
+  for (const ligne of await readFile(chemin, "utf8").then((c) => c.split("\n")).catch(() => [])) {
+    if (!/^[A-Z0-9_]+=/.test(ligne) || ligne.startsWith("DEMO_")) continue;
+    base.push(ligne);
+  }
+  const demo = [...sectionDemo.entries()].map(([cle, valeur]) => `${cle}=${valeur}`);
+  const entetes = [
+    "# Goama — configuration locale de démonstration.",
+    "# Secrets et identifiants générés au premier démarrage de la stack.",
+    "# Fichier non versionné (ignoré par git, autorisations 600).",
+    "# Régénérer : docker compose down -v && docker compose up --build -d.",
+  ];
+  await writeFile(chemin, `${entetes.join("\n")}\n${base.join("\n")}\n${demo.join("\n")}\n`, { mode: 0o600 });
+  await chmod(chemin, 0o600);
+  const uidLocal = Number(process.env.LOCAL_UID ?? 1000);
+  const gidLocal = Number(process.env.LOCAL_GID ?? 1000);
+  await chown(chemin, uidLocal, gidLocal).catch(() => undefined);
 }
 
 // Aucun compte de démonstration n'est codé en dur : le jeu est chargé depuis
@@ -28,12 +60,13 @@ const CompteDemo = z.object({
 });
 const comptes = (JSON.parse(contenuComptes) as { comptes: unknown[] }).comptes.map((compte) => CompteDemo.parse(compte));
 
-console.log("\nGoama — comptes locaux de démonstration\n");
-console.log(`Administrateur\n  Matricule : ${process.env.ADMIN_MATRICULE}\n  Mot de passe : ${process.env.ADMIN_PASSWORD}\n  Secret TOTP : ${process.env.ADMIN_TOTP_SECRET}\n  Pour obtenir le code : ouvre https://totp.app et ajoute ce secret (démo locale uniquement).\n`);
+const identifiantsDemo = new Map<string, string>();
+const etat = new Map<string, "crée" | "conservé">();
+
 for (const compte of comptes) {
   const existant = await prisma.agent.findUnique({ where: { matricule: compte.matricule }, select: { id: true } });
   if (existant) {
-    console.log(`${compte.matricule}: déjà présent, conservé sans changement (reprendre ses identifiants précédemment affichés).`);
+    etat.set(compte.matricule, "conservé");
     continue;
   }
   const motDePasse = randomBytes(18).toString("base64url");
@@ -45,7 +78,26 @@ for (const compte of comptes) {
     secretHash: hasherSecret(motDePasse),
     totpSecret: chiffrerSecretTotp(secretTotp),
   } });
-  const codeTotp = new TOTP({ secret: secretTotp, digits: 6, period: 30 }).generate();
-  console.log(`${compte.matricule}\n  Mot de passe : ${motDePasse}\n  Code TOTP actuel : ${codeTotp}\n  Secret TOTP : ${secretTotp}\n  Pour obtenir les prochains codes : ouvre https://totp.app et ajoute ce secret (démo locale uniquement).\n`);
+  etat.set(compte.matricule, "crée");
+  // Clés dérivées du matricule (DEMO-AGENT-001 → DEMO_AGENT_001_*).
+  const prefixe = compte.matricule.replace(/-/g, "_");
+  identifiantsDemo.set(`${prefixe}_MATRICULE`, compte.matricule);
+  identifiantsDemo.set(`${prefixe}_PASSWORD`, motDePasse);
+  identifiantsDemo.set(`${prefixe}_TOTP_SECRET`, secretTotp);
 }
+
+await ecrireIdentifiantsDansEnv(identifiantsDemo);
+
+console.log("\nGoama — comptes de démonstration locaux");
+for (const compte of comptes) {
+  console.log(`  ${compte.matricule} (${compte.fonction}) : ${etat.get(compte.matricule)}`);
+}
+console.log("\nIdentifiants de connexion (matricule, mot de passe, secret TOTP) :");
+if (identifiantsDemo.size > 0) {
+  console.log("  fichier .env à la racine du dépôt — non versionné, autorisations 600.");
+} else {
+  console.log("  déjà contenus dans le fichier .env du premier démarrage (aucun nouvel identifiant).");
+  console.log("  Si ce fichier a été supprimé, les identifiants sont irrécupérables : réinitialisez avec docker compose down -v.");
+}
+console.log("  Aucun identifiant n'apparaît dans les journaux.");
 await prisma.$disconnect();

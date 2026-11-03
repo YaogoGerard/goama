@@ -1,9 +1,12 @@
 # Goama — déploiement conteneurisé, lancement en une commande :
 #   docker compose up --build
-# Au premier démarrage, le service init-secrets génère les secrets
-# applicatifs dans un volume partagé (stables aux redémarrages).
-# Pour une installation sur un domaine HTTPS public, surcharger les
-# variables via un fichier .env (voir docs/DEPLOIEMENT_SECURITE.md).
+# Au premier démarrage, les secrets applicatifs sont générés dans un volume
+# partagé (stables aux redémarrages) et une copie lisible est écrite dans le
+# fichier .env à la racine du dépôt (non versionné, autorisations 600),
+# y compris les identifiants des comptes de démonstration. Aucun secret
+# n'apparaît dans les journaux.
+# Pour une installation sur un domaine HTTPS public, préparer le .env avec
+# ses propres secrets (voir docs/DEPLOIEMENT_SECURITE.md).
 
 services:
   init-secrets:
@@ -12,8 +15,15 @@ services:
       dockerfile: Dockerfile
     entrypoint: ["/app/scripts/init-secrets.sh"]
     command: []
+    environment:
+      # Écrit le fichier .env non versionné à la racine du dépôt (one-shot,
+      # exécution uniquement locale — voir docs/DEPLOIEMENT_SECURITE.md).
+      ENV_FILE_DIR: /depot-hote
+      LOCAL_UID: ${HOST_UID:-1000}
+      LOCAL_GID: ${HOST_GID:-1000}
     volumes:
       - secrets-data:/run/goama-secrets
+      - .:/depot-hote
     restart: "no"
 
   db:
@@ -83,8 +93,12 @@ services:
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
       PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5173}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      ENV_FILE_DIR: /depot-hote
+      LOCAL_UID: ${HOST_UID:-1000}
+      LOCAL_GID: ${HOST_GID:-1000}
     volumes:
       - secrets-data:/run/secrets:ro
+      - .:/depot-hote
     depends_on:
       api:
         condition: service_healthy

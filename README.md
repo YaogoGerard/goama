@@ -51,10 +51,12 @@ Depuis la racine du dépôt, avec Docker Engine et Docker Compose installés :
 docker compose up --build -d
 ```
 
-Aucun fichier `.env`, aucun dossier de secrets et aucun script de préparation ne sont nécessaires : le service `init-secrets` génère les secrets dans un volume Docker au premier démarrage. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »). Les identités des comptes fictifs sont seules dans le code source (script de démonstration) ; les mots de passe et secrets TOTP sont générés à l'exécution. Les identifiants de connexion sont affichés dans les journaux du service `setup` :
+Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au premier démarrage, les secrets applicatifs sont générés puis le service d'initialisation écrit le fichier `.env` à la racine du dépôt (non versionné, autorisations 600). Il contient les secrets, les identifiants des comptes de démonstration, la configuration locale par défaut ; il est conservé tel quel aux démarrages suivants. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »).
+
+Les identifiants de connexion ne sont jamais affichés dans les journaux ; ils sont dans le fichier `.env` :
 
 ```bash
-docker compose logs setup
+grep -E '^DEMO_|^ADMIN_' .env
 ```
 
 Ouvre ensuite :
