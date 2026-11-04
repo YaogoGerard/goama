@@ -55,6 +55,8 @@ Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au pr
 
 À la fin du démarrage, le service `setup` affiche un récapitulatif prêt à l'emploi : adresses des interfaces, puis pour l'administrateur et chacun des deux agents, le matricule, le mot de passe, le secret TOTP et le lien `otpauth` à ouvrir dans une application d'authentification. Les mêmes valeurs sont écrites dans le fichier `.identifiants-demo` à la racine du dépôt (non versionné, autorisations 600) et réaffichées à chaque démarrage.
 
+Pour obtenir le code TOTP de 6 chiffres, n'importe quelle application compatible convient — Google Authenticator, Aegis ou FreeOTP en ouvrant le lien `otpauth` sur un appareil mobile, ou en saisissant le secret à la main. Pour un essai local sans-application, un service web comme [totp.app](https://totp.app) permet de coller le secret et lire le code au fil ; n'utilise jamais un service en ligne pour un compte réel ou de production (l'enrôlement réel génère un QR code directement dans la console d'administration).
+
 Avec `docker compose up --build` (au premier plan), le récapitulatif apparaît directement dans la sortie ; en arrière-plan (`-d`), il se relit avec :
 
 ```bash
