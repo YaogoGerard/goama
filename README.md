@@ -51,7 +51,7 @@ Depuis la racine du dépôt, avec Docker Engine et Docker Compose installés :
 docker compose up --build
 ```
 
-Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au premier démarrage, les secrets applicatifs sont générés puis le service d'initialisation écrit le fichier `.env` à la racine du dépôt (non versionné, autorisations 600). Il contient les secrets et la configuration locale par défaut ; il est conservé tel quel aux démarrages suivants. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »).
+Aucun fichier `.env` ni dossier de secrets n'est à préparer au départ : au premier démarrage, les secrets applicatifs sont générés dans un volume Docker, puis une copie lisible est écrite dans le fichier `.env` à la racine du dépôt (non versionné, autorisations 600). Ce fichier est réaligné sur le volume des secrets à chaque démarrage (une régénération des secrets met la copie à jour) ; les clés additionnelles que tu y ajoutes sont conservées. Compose démarre les services, applique les migrations, puis crée un administrateur et deux agents fictifs s'ils n'existent pas déjà : un agent habilité au parrainage (« Chef de Service ») et un agent sans cette habilitation (« Rédacteur »).
 
 À la fin du démarrage, le service `setup` affiche un récapitulatif prêt à l'emploi : adresses des interfaces, puis pour l'administrateur et chacun des deux agents, le matricule, le mot de passe, le secret TOTP et le lien `otpauth` à ouvrir dans une application d'authentification. Les mêmes valeurs sont écrites dans le fichier `.identifiants-demo` à la racine du dépôt (non versionné, autorisations 600) et réaffichées à chaque démarrage.
 
@@ -77,7 +77,26 @@ Arrêter les services sans effacer les données :
 docker compose down
 ```
 
-Relancer ensuite avec `docker compose up -d`. Compose crée les comptes manquants au démarrage ; les comptes existants ne sont ni réinitialisés ni modifiés. Pour supprimer aussi les données locales, il faudrait supprimer les volumes Docker ; cette opération est destructive.
+Relancer ensuite avec `docker compose up -d`. Compose crée les comptes manquants au démarrage ; les comptes existants ne sont ni réinitialisés ni modifiés.
+
+Pour repartir d'une copie entièrement fraîche (nouvelle base, nouveaux secrets, nouveaux identifiants de démonstration) :
+
+```bash
+docker compose down -v
+docker compose up --build -d
+```
+
+Cette opération est destructive : les conversations et fichiers de démonstration locaux sont perdus, et les identifiants affichés au démarrage précédent ne fonctionnent plus. Retrouve les nouveaux identifiants dans `.identifiants-demo` et les secrets dans `.env`.
+
+## Démonstration E2EE en deux comptes
+
+Une fois connecté dans deux fenêtres du navigateur (parrain dans l'une, agent dans l'autre), le parcours sans configuration supplémentaire :
+
+1. Le parrain crée un groupe et ajoute l'agent.
+2. Le parrain envoie un message : la publication réseau du client ne contient que du ciphertext Megolm et des `session_id` — jamais le texte.
+3. L'agent voit le message déchiffré en temps réel, sans que le serveur ait pu le lire.
+
+La démonstration automatisée de bout en bout (déchiffrement en temps réel, trafic terminal exclusivement chiffré, aucune donnée en clair en base) est documentée dans [`docs/13_protocole_olm_megolm.md`](docs/13_protocole_olm_megolm.md).
 
 ## Déploiement
 
@@ -108,6 +127,8 @@ cd backend && npm ci && npm run typecheck && npm run test:isolated
 cd ../admin && npm ci && npm run build && npm run test:e2e
 cd ../web && npm ci && npm run build && npm run test:e2e
 ```
+
+Les tests de fumée Playwright de la console d'administration (`cd admin && npm run test:smoke`) s'exécutent contre la stack Docker démarrée.
 
 - Tests backend : contrôle d'accès (JWT court, renouvellement cookie HttpOnly, 2FA, verrouillage, révocation immédiate, session unique, parrainage), stockage opaque, enveloppes Megolm/Olm, signatures Ed25519, chiffrement au repos.
 - Tests admin : parcours d'interface (vitest/happy-dom) et tests de fumée Playwright contre la stack Docker (`npm run test:smoke`).
