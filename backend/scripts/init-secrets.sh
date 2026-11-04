@@ -18,7 +18,7 @@ hex32 jwt_secret
 hex32 totp_encryption_key
 hex32 group_request_encryption_key
 
-# Mot de passe administrateur lisible-typo (base64url, sans caractères ambigus).
+# Mot de passe administrateur lisible (base64url, sans caractères ambigus).
 file="$DIR/admin_password"
 [ -s "$file" ] || node -e 'const c=require("crypto");process.stdout.write(c.randomBytes(20).toString("base64url"))' > "$file"
 
@@ -27,34 +27,48 @@ file="$DIR/admin_totp_secret"
 [ -s "$file" ] || node -e 'const c=require("crypto");const A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let s="";for(const x of c.randomBytes(20)) s+=A[x%32];process.stdout.write(s)' > "$file"
 
 # Copie lisible conservée par l'opérateur : le fichier .env à la racine du
-# dépôt (non versionné) est créé au premier démarrage uniquement. Les
-# démarrages suivants le laissent inchangé ; régénérer = réinitialiser les
-# volumes (docker compose down -v). Aucun secret n'est journalisé.
+# dépôt (non versionné) reflète en permanence les secrets du volume. Les clés
+# gérées sont réalignées à chaque démarrage (le volume fait foi : une
+# recréation du volume met la copie à jour) ; les clés additionnelles déjà
+# présentes sont conservées telles quelles. Aucun secret n'est journalisé.
 if [ -n "${ENV_FILE_DIR:-}" ]; then
-  envfile="$ENV_FILE_DIR/.env"
-  if [ ! -s "$envfile" ]; then
-    {
-      echo "# Goama — configuration locale de démonstration, générée au premier démarrage."
-      echo "# Fichier non versionné (ignoré par git, autorisations 600)."
-      echo "# Pour tout régénérer : docker compose down -v && docker compose up --build -d."
-      echo "JWT_SECRET=$(cat "$DIR/jwt_secret")"
-      echo "TOTP_ENCRYPTION_KEY=$(cat "$DIR/totp_encryption_key")"
-      echo "GROUP_REQUEST_ENCRYPTION_KEY=$(cat "$DIR/group_request_encryption_key")"
-      echo "POSTGRES_PASSWORD=$(cat "$DIR/postgres_password")"
-      echo "ADMIN_PASSWORD=$(cat "$DIR/admin_password")"
-      echo "ADMIN_TOTP_SECRET=$(cat "$DIR/admin_totp_secret")"
-      echo "ADMIN_MATRICULE=${ADMIN_MATRICULE:-ADMIN001}"
-      echo "CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000,http://localhost:5173}"
-      echo "PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-http://localhost:3000}"
-      echo "PUBLIC_ADMIN_URL=${PUBLIC_ADMIN_URL:-http://localhost:5173}"
-      echo "PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:8080}"
-    } > "$envfile"
-    chmod 600 "$envfile"
-    chown "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}" "$envfile" 2>/dev/null || true
-    echo "Fichier .env créé à la racine du dépôt (identifiants inclus, non versionné)."
-  else
-    echo "Fichier .env déjà présent à la racine du dépôt : conservé sans changement."
-  fi
+  DIR="$DIR" ENV_FILE_DIR="$ENV_FILE_DIR" LOCAL_UID="${LOCAL_UID:-1000}" LOCAL_GID="${LOCAL_GID:-1000}" \
+  node <<'NODE'
+const fs = require("node:fs");
+const dir = process.env.DIR;
+const cible = `${process.env.ENV_FILE_DIR}/.env`;
+const lit = (nom) => fs.readFileSync(`${dir}/${nom}`, "utf8").trim();
+const gerees = new Map([
+  ["JWT_SECRET", lit("jwt_secret")],
+  ["TOTP_ENCRYPTION_KEY", lit("totp_encryption_key")],
+  ["GROUP_REQUEST_ENCRYPTION_KEY", lit("group_request_encryption_key")],
+  ["POSTGRES_PASSWORD", lit("postgres_password")],
+  ["ADMIN_PASSWORD", lit("admin_password")],
+  ["ADMIN_TOTP_SECRET", lit("admin_totp_secret")],
+  ["ADMIN_MATRICULE", process.env.ADMIN_MATRICULE || "ADMIN001"],
+  ["CORS_ORIGIN", process.env.CORS_ORIGIN || "http://localhost:3000,http://localhost:5173"],
+  ["PUBLIC_WEB_URL", process.env.PUBLIC_WEB_URL || "http://localhost:3000"],
+  ["PUBLIC_ADMIN_URL", process.env.PUBLIC_ADMIN_URL || "http://localhost:5173"],
+  ["PUBLIC_API_URL", process.env.PUBLIC_API_URL || "http://localhost:8080"],
+]);
+const entetes = [
+  "# Goama — configuration locale de démonstration.",
+  "# Fichier non versionné (ignoré par git, autorisations 600).",
+  "# Secrets réalignés sur le volume des secrets à chaque démarrage : le volume fait foi.",
+  "# Pour tout régénérer : docker compose down -v && docker compose up --build -d.",
+];
+const lignes = fs.existsSync(cible) ? fs.readFileSync(cible, "utf8").split("\n") : [];
+const cles = new Set([...gerees.keys()]);
+const additionnelles = lignes.filter((l) => {
+  const m = /^([A-Z0-9_]+)=/.exec(l);
+  return m && !cles.has(m[1]);
+});
+const corps = [...gerees.entries()].map(([k, v]) => `${k}=${v}`);
+fs.writeFileSync(cible, `${entetes.join("\n")}\n${additionnelles.length ? additionnelles.join("\n") + "\n" : ""}${corps.join("\n")}\n`, { mode: 0o600 });
+fs.chmodSync(cible, 0o600);
+try { fs.chownSync(cible, Number(process.env.LOCAL_UID), Number(process.env.LOCAL_GID)); } catch {}
+process.stdout.write("Fichier .env réaligné sur le volume des secrets (copie lisible, non versionnée).\n");
+NODE
 fi
 
 chmod 600 "$DIR"/*
